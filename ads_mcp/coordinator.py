@@ -19,6 +19,26 @@ server using `@mcp.tool` annotations, thereby 'coordinating' the bootstrapping
 of the server.
 """
 
-from mcp.server.fastmcp import FastMCP
+import os
+from fastmcp import FastMCP
+from fastmcp.server.auth.providers.google import GoogleProvider
 
-mcp = FastMCP("Google Ads Server")
+_CLIENT_ID = os.environ.get("GOOGLE_ADS_MCP_OAUTH_CLIENT_ID")
+_CLIENT_SECRET = os.environ.get("GOOGLE_ADS_MCP_OAUTH_CLIENT_SECRET")
+_BASE_URL = os.environ.get("GOOGLE_ADS_MCP_BASE_URL", "http://localhost:8000")
+
+if _CLIENT_ID and _CLIENT_SECRET:
+    auth = GoogleProvider(
+        client_id=_CLIENT_ID,
+        client_secret=_CLIENT_SECRET,
+        base_url=_BASE_URL,
+        required_scopes=[
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/adwords",
+        ],
+    )
+    mcp = FastMCP("Google Ads Server", auth=auth)
+else:
+    mcp = FastMCP("Google Ads Server")

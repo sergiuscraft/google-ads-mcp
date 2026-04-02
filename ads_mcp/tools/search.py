@@ -17,6 +17,8 @@
 from typing import Any, Dict, List
 from ads_mcp.coordinator import mcp
 import ads_mcp.utils as utils
+from google.ads.googleads.errors import GoogleAdsException
+from fastmcp.exceptions import ToolError
 
 
 def search(
@@ -57,17 +59,26 @@ def search(
     query = "".join(query_parts)
     utils.logger.info(f"ads_mcp.search query {query}")
 
-    query_result = ga_service.search_stream(
-        customer_id=customer_id, query=query
-    )
+    try:
+        query_result = ga_service.search_stream(
+            customer_id=customer_id, query=query
+        )
 
-    final_output: List = []
-    for batch in query_result:
-        for row in batch.results:
-            final_output.append(
-                utils.format_output_row(row, batch.field_mask.paths)
-            )
-    return final_output
+        final_output: List = []
+        for batch in query_result:
+            for row in batch.results:
+                final_output.append(
+                    utils.format_output_row(row, batch.field_mask.paths)
+                )
+        return final_output
+    except GoogleAdsException as ex:
+        error_msgs = [
+            f"Google Ads API Error: {error.message}"
+            for error in ex.failure.errors
+        ]
+        raise ToolError(
+            f"Request ID: {ex.request_id}\n" + "\n".join(error_msgs)
+        )
 
 
 def _search_tool_description() -> str:
@@ -122,8 +133,5 @@ def _search_tool_description() -> str:
 # runtime. Uses the `add_tool` method instead of an annnotation since `add_tool`
 # provides the flexibility needed to generate the description while also
 # including the `search` method's docstring.
-mcp.add_tool(
-    search,
-    title="Fetches data from the Google Ads API using the search method",
-    description=_search_tool_description(),
-)
+search.__doc__ = _search_tool_description()
+mcp.add_tool(search)

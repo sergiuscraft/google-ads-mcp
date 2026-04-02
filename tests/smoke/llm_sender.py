@@ -22,6 +22,22 @@ from google.genai import errors
 from tests.smoke import smoke_utils
 
 
+def _strip_additional_properties(schema: dict) -> dict:
+    """Recursively removes 'additionalProperties' and 'additional_properties' from the schema."""
+    if not isinstance(schema, dict):
+        return schema
+    for key, value in list(schema.items()):
+        if key in ("additionalProperties", "additional_properties"):
+            del schema[key]
+        elif isinstance(value, dict):
+            _strip_additional_properties(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    _strip_additional_properties(item)
+    return schema
+
+
 def get_llm_response(
     prompt: str | list, tools: list, include_usage: bool = False
 ) -> str | dict:
@@ -53,10 +69,14 @@ def get_llm_response(
         elif len(description) > 1024:
             description = description[:1024] + "..."
 
+        parameters = _strip_additional_properties(
+            dict(tool.get("inputSchema", {}))
+        )
+
         fd = types.FunctionDeclaration(
             name=tool["name"],
             description=description,
-            parameters=tool.get("inputSchema", {}),
+            parameters=parameters,
         )
         function_declarations.append(fd)
 

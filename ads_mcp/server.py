@@ -29,8 +29,17 @@ from ads_mcp.resources import (
 )  # noqa: F401
 
 
+import os
+
+
 def run_server() -> None:
-    mcp.run()
+    _CLIENT_ID = os.environ.get("GOOGLE_ADS_MCP_OAUTH_CLIENT_ID")
+    _CLIENT_SECRET = os.environ.get("GOOGLE_ADS_MCP_OAUTH_CLIENT_SECRET")
+
+    if _CLIENT_ID and _CLIENT_SECRET:
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

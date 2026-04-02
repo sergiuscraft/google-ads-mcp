@@ -96,3 +96,42 @@ class TestSearch(unittest.TestCase):
                         description,
                     )
                     mock_log_error.assert_called_once()
+
+    @patch("ads_mcp.utils.get_googleads_service")
+    def test_search_google_ads_exception(self, mock_get_service):
+        """Tests that search handles GoogleAdsException and returns an error dict."""
+        from google.ads.googleads.errors import GoogleAdsException
+
+        mock_service = MagicMock()
+        mock_get_service.return_value = mock_service
+
+        # Mock failure object
+        mock_error = MagicMock()
+        mock_error.message = "Invalid field name"
+        mock_failure = MagicMock()
+        mock_failure.errors = [mock_error]
+
+        # Instantiate real exception with dummy args
+        mock_ex = GoogleAdsException(
+            MagicMock(), MagicMock(), MagicMock(), MagicMock()
+        )
+        mock_ex.failure = mock_failure
+        mock_ex.request_id = "req-123"
+
+        mock_service.search_stream.side_effect = mock_ex
+
+        # Call search and verify it raises ToolError
+        from fastmcp.exceptions import ToolError
+
+        with self.assertRaises(ToolError) as context:
+            search.search(
+                customer_id="1234567890",
+                fields=["invalid_field"],
+                resource="campaign",
+            )
+
+        # Verify error message
+        self.assertIn(
+            "Google Ads API Error: Invalid field name", str(context.exception)
+        )
+        self.assertIn("Request ID: req-123", str(context.exception))
