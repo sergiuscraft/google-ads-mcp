@@ -23,11 +23,17 @@ from typing import Any, Dict, List, Optional
 
 def start_server_process() -> subprocess.Popen:
     """Starts the MCP server as a subprocess."""
+    # Ensure the server runs in stdio mode by clearing OAuth proxy env vars
+    env = os.environ.copy()
+    env.pop("GOOGLE_ADS_MCP_OAUTH_CLIENT_ID", None)
+    env.pop("GOOGLE_ADS_MCP_OAUTH_CLIENT_SECRET", None)
+
     return subprocess.Popen(
         [sys.executable, "-m", "ads_mcp.server"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
+        env=env,
         text=True,
         bufsize=0,  # Unbuffered
     )
