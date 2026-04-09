@@ -14,8 +14,16 @@ to provide several
 ### Tools available
 
 - `search`: Retrieves information about the Google Ads account.
+- `get_resource_metadata`: Retrieves metadata about a Google Ads API resource type, for example "campaign". This is useful to understand the structure of the data and what fields are available for querying.
 - `list_accessible_customers`: Returns names of customers directly accessible
   by the user authenticating the call.
+
+### Resources available
+
+- `discovery-document`: Retrieve the Google Ads API discovery document. Provides the discovery document for the latest version of the Google Ads API, which describes the API surface, including resources, methods, and schemas. Host LLMs should access this resource to understand the structure of the Google Ads API and discover available features.
+- `metrics`: Retrieve information about the metrics available for reporting in the Google Ads API.
+- `segments`: Retrieve information about the segments available for reporting in the Google Ads API.
+- `release-notes`: Retrieve the release notes for the latest version of the Google Ads API
 
 ## Notes
 
@@ -40,6 +48,8 @@ Setup involves the following steps:
 ### Configure Developer Token
 
 Follow the instructions for [Obtaining a Developer Token](https://developers.google.com/google-ads/api/docs/get-started/dev-token).
+
+Make sure your developer token has at least [Explorer access](https://developers.google.com/google-ads/api/docs/api-policy/access-levels).
 
 Record 'YOUR_DEVELOPER_TOKEN', you will need this for the the 'Configure Gemini' step below
 
