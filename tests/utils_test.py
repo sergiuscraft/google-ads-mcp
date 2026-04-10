@@ -23,7 +23,6 @@ from google.ads.googleads.v23.common.types.metrics import Metrics
 from ads_mcp import utils
 
 
-
 class TestUtils(unittest.TestCase):
     """Test cases for the utils module."""
 
@@ -50,7 +49,6 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(formatted.get("clicks"), "10")
         self.assertEqual(formatted.get("impressions"), "100")
 
-
     def test_format_output_value_repeated_primitive(self):
         """Tests that repeated primitive values are formatted."""
         self.assertEqual(
@@ -67,5 +65,3 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(len(formatted), 2)
         self.assertEqual(formatted[0].get("clicks"), "10")
         self.assertEqual(formatted[1].get("clicks"), "20")
-
-

@@ -112,7 +112,6 @@ def format_output_value(value: Any) -> Any:
         return value
 
 
-
 def format_output_row(row: proto.Message, attributes):
     return {
         attr: format_output_value(get_nested_attr(row, attr))
