@@ -104,6 +104,10 @@ def get_googleads_client():
 def format_output_value(value: Any) -> Any:
     if isinstance(value, proto.Enum):
         return value.name
+    elif isinstance(value, proto.Message):
+        return proto.Message.to_dict(value)
+    elif hasattr(value, "__iter__") and not isinstance(value, (str, bytes)):
+        return [format_output_value(v) for v in value]
     else:
         return value
 
