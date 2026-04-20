@@ -30,8 +30,9 @@ def get_metrics() -> str:
     Provides the official documentation for metrics in the Google Ads API,
     listing all available metrics that can be queried to analyze performance
     data.
-    Host LLMs should access this resource to identify which metrics are
-    available and how they are calculated.
+
+    Use this resource to identify which metrics are available and how they are
+    calculated.
 
     Returns:
         str: The metrics documentation in HTML format.

@@ -101,6 +101,7 @@ def _search_tool_description() -> str:
 ### Hints
     Language Grammar can be found at https://developers.google.com/google-ads/api/docs/query/grammar
     All resources and descriptions are found at https://developers.google.com/google-ads/api/fields/v23/overview
+    If the query fails, a ToolError will be raised with the error details.
 
     For Conversion issues try looking in offline_conversion_upload_conversion_action_summary
 
@@ -110,8 +111,7 @@ def _search_tool_description() -> str:
 
 ### Hints for Dates
     All dates should be in the form YYYY-MM-DD and must include the dashes (-)
-    Date literals from the Grammar must NEVER be used
-    Date ranges should be finite and must include a start and end date
+    Date ranges must be finite and must include a start and end date
 
 ### Hints for limits
     Requests to resource change_event must specify a LIMIT of less than or equal to 10000
@@ -121,10 +121,12 @@ def _search_tool_description() -> str:
 
 
 ### Hints for all resources
-    What follows is a list of valid resources that can be queried.
-    To find out which specific fields you can select, filter by, or sort by for a given resource, you MUST use the `get_resource_metadata` tool.
+    To find out which specific fields (including compatible metrics and segments) you can select, filter by, or sort by for a given resource, you MUST use the `get_resource_metadata` tool.
     Do not guess the fields. Use the tool to look them up.
     Once you have the fields, ensure the whole field name is used (e.g., 'campaign.id', not just 'id'). Wildcards and partial fields are not allowed.
+
+### Valid resources
+    What follows is a list of valid resources that can be queried.
     {file_content}
 """
 
