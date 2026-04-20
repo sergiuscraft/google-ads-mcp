@@ -41,7 +41,7 @@
     "prompt_tokens": 470,
     "output_tokens": 22,
     "model": "gemini-flash-latest",
-    "thought_tokens": 79,
+    "thought_tokens": 130,
     "tool_tokens": 22119
   },
   {
@@ -73,14 +73,29 @@
   },
   {
     "prompt": "What fields are available for the campaign resource?",
-    "expected_tool": "get_resource_metadata"
+    "expected_tool": "get_resource_metadata",
+    "prompt_tokens": 461,
+    "output_tokens": 20,
+    "thought_tokens": 34,
+    "model": "gemini-flash-latest",
+    "tool_tokens": 32789
   },
   {
     "prompt": "Find metrics compatible with ad_group.",
-    "expected_tool": "get_resource_metadata"
+    "expected_tool": "get_resource_metadata",
+    "prompt_tokens": 460,
+    "output_tokens": 22,
+    "thought_tokens": 32,
+    "model": "gemini-flash-latest",
+    "tool_tokens": 22119
   },
   {
     "prompt": "What segments can I select with the customer resource?",
-    "expected_tool": "get_resource_metadata"
+    "expected_tool": "get_resource_metadata",
+    "prompt_tokens": 462,
+    "output_tokens": 20,
+    "thought_tokens": 38,
+    "model": "gemini-flash-latest",
+    "tool_tokens": 21257
   }
 ]
