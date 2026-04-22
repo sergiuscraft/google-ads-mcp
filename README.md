@@ -15,7 +15,7 @@ to provide several
 
 - `search`: Retrieves information about the Google Ads account.
 - `get_resource_metadata`: Retrieves metadata about a Google Ads API resource type, for example "campaign". This is useful to understand the structure of the data and what fields are available for querying.
-- `list_accessible_customers`: Returns names of customers directly accessible
+- `list_accessible_customers`: Returns ids of customers directly accessible
   by the user authenticating the call.
 
 ### Resources available
