@@ -10,7 +10,7 @@
         "idempotentHint": true,
         "readOnlyHint": true
       },
-      "description": "Retrieve the Google Ads API discovery document.\n\nProvides the discovery document for the Google Ads API v23, which\ndescribes the API surface, including resources, methods, and schemas.\n\nUse this resource to get a high-level overview of the API surface or to find\navailable resources. However, for finding specific fields, you MUST use the\n`get_resource_metadata` tool instead, as it provides more targeted and\nup-to-date information for queries.\n\nReturns:\n    str: The discovery document in JSON format.",
+      "description": "Retrieve the Google Ads API discovery document.\n\nProvides the discovery document for the Google Ads API, which\ndescribes the API surface, including resources, methods, and schemas.\n\nUse this resource to get a high-level overview of the API surface or to find\navailable resources. However, for finding specific fields, you MUST use the\n`get_resource_metadata` tool instead, as it provides more targeted and\nup-to-date information for queries.\n\nReturns:\n    str: The discovery document in JSON format.",
       "mimeType": "application/json",
       "name": "get_discovery_document",
       "uri": "resource://discovery-document"

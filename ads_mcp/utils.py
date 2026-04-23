@@ -20,7 +20,7 @@ from typing import Any
 import proto
 import logging
 from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.v23.services.services.google_ads_service import (
+from google.ads.googleads.v24.services.services.google_ads_service import (
     GoogleAdsServiceClient,
 )
 

@@ -27,7 +27,7 @@ from ads_mcp.coordinator import mcp
 def get_discovery_document() -> str:
     """Retrieve the Google Ads API discovery document.
 
-    Provides the discovery document for the Google Ads API v23, which
+    Provides the discovery document for the Google Ads API, which
     describes the API surface, including resources, methods, and schemas.
 
     Use this resource to get a high-level overview of the API surface or to find
@@ -38,7 +38,7 @@ def get_discovery_document() -> str:
     Returns:
         str: The discovery document in JSON format.
     """
-    url = "https://googleads.googleapis.com/$discovery/rest?version=v23"
+    url = "https://googleads.googleapis.com/$discovery/rest?version=v24"
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0"},
