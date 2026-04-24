@@ -7,7 +7,7 @@ This repo contains the source code for running a local
 ## Tools
 
 The server uses the
-[Google Ads API](https://developers.google.com/google-ads/api/reference/rpc/v21/overview)
+[Google Ads API](https://developers.google.com/google-ads/api/reference/rpc/v24/overview)
 to provide several
 [Tools](https://modelcontextprotocol.io/docs/concepts/tools) for use with LLMs.
 
