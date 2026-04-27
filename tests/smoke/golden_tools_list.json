@@ -35,6 +35,9 @@
           "tags": []
         }
       },
+      "annotations": {
+        "readOnlyHint": true
+      },
       "description": "Returns ids of customers directly accessible by the user authenticating the call.\n\nUse this tool first to discover available customer IDs if the user hasn't\nprovided one. Most other tools require a valid customer ID as input.\n\nReturns:\n    List[str]: A list of customer IDs.",
       "inputSchema": {
         "additionalProperties": false,
@@ -63,6 +66,9 @@
         "fastmcp": {
           "tags": []
         }
+      },
+      "annotations": {
+        "readOnlyHint": true
       },
       "description": "Fetches data from the Google Ads API using the search method",
       "inputSchema": {
