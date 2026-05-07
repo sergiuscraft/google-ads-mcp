@@ -365,7 +365,7 @@ This repository also provides [Agent Skills](https://agentskills.io/), which are
 
 ### Skills available
 
-- `account-performance-diagnostics`: Diagnose account performance issues such as conversion loss, low lead flow, and lost opportunities. Located in `skills/account-performance-diagnostics`.
+- `account-performance-diagnostics`: Diagnose account performance issues such as conversion loss, low lead flow, and lost opportunities. Located in `ads_mcp/skills/account-performance-diagnostics`.
 
 ### How to install skills
 
