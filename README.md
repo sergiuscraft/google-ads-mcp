@@ -359,6 +359,22 @@ be simpler.
 How many active campaigns do I have for customer id 1234567890
 ```
 
+## Skills
+
+This repository also provides [Agent Skills](https://agentskills.io/), which are specialized workflows and instructions that give AI agents specific expertise.
+
+### Skills available
+
+- `account-performance-diagnostics`: Diagnose account performance issues such as conversion loss, low lead flow, and lost opportunities. Located in `skills/account-performance-diagnostics`.
+
+### How to install skills
+
+To use these skills, you need to point your skills-compatible AI agent to the skill directory.
+
+For example, if you are using [Gemini CLI](https://github.com/google-gemini/gemini-cli), you can install the skill by copying the folder to your skills directory or referencing it. See the [Gemini CLI Skills documentation](https://geminicli.com/docs/cli/skills/) for detailed instructions.
+
+While that guide is specific to Gemini CLI, Agent Skills are an open standard and can be loaded by any compatible agent or LLM tool that supports the format (e.g., Claude Code, Cursor).
+
 
 ## Contributing
 
