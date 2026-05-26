@@ -27,9 +27,9 @@ def search(
     customer_id: str,
     fields: List[str],
     resource: str,
-    conditions: List[str] = None,
-    orderings: List[str] = None,
-    limit: int = None,
+    conditions: List[str] | None = None,
+    orderings: List[str] | None = None,
+    limit: int | None = None,
 ) -> List[Dict[str, Any]]:
     """Fetches data from the Google Ads API using the search method
 
