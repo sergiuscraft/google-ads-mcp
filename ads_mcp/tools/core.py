@@ -15,7 +15,7 @@
 """Tools for exposing simple, core API methods to the MCP server."""
 
 from typing import List
-from ads_mcp.coordinator import mcp
+from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 import ads_mcp.utils as utils
@@ -24,8 +24,10 @@ from google.ads.googleads.v24.services.types.customer_service import (
     ListAccessibleCustomersResponse,
 )
 
+customers_mcp = FastMCP("customers")
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+
+@customers_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def list_accessible_customers() -> List[str]:
     """Returns ids of customers directly accessible by the user authenticating the call.
 

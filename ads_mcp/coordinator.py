@@ -42,3 +42,52 @@ if _CLIENT_ID and _CLIENT_SECRET:
     mcp = FastMCP("Google Ads Server", auth=auth)
 else:
     mcp = FastMCP("Google Ads Server")
+
+
+def initialize_and_mount_tools(parent_mcp: FastMCP) -> None:
+    """Loads the tools configuration and dynamically mounts the tools sub-servers."""
+    from ads_mcp.config import ToolsConfig
+    import importlib
+    import pkgutil
+    import ads_mcp.tools as tools_pkg
+
+    # Map of category name -> FastMCP sub-server
+    sub_servers = {}
+
+    # Discover and dynamically load all tool modules
+    for _, module_name, _ in pkgutil.iter_modules(tools_pkg.__path__):
+        full_module_name = f"ads_mcp.tools.{module_name}"
+        module = importlib.import_module(full_module_name)
+
+        # Find any FastMCP instances defined in the module
+        for attr_name in dir(module):
+            attr_val = getattr(module, attr_name)
+            if isinstance(attr_val, FastMCP):
+                category = attr_val.name
+                sub_servers[category] = attr_val
+
+    config = ToolsConfig.load()
+
+    for category, sub_mcp in sub_servers.items():
+        if not config.is_namespace_enabled(category):
+            continue
+
+        # Filter disabled tools inside the sub-server before mounting
+        tool_names = []
+        for key, val in sub_mcp.local_provider._components.items():
+            if key.startswith("tool:"):
+                tool_names.append(val.name)
+
+        for name in tool_names:
+            if not config.is_tool_enabled(category, name):
+                sub_mcp.local_provider.remove_tool(name)
+
+        # Determine prefix/namespace
+        namespace_prefix = config.get_namespace_prefix(category)
+
+        # Mount the sub-server
+        parent_mcp.mount(sub_mcp, namespace=namespace_prefix or None)
+
+
+# Automatically initialize and mount tools upon import
+initialize_and_mount_tools(mcp)

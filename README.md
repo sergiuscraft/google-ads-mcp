@@ -18,7 +18,32 @@ to provide several
 - `list_accessible_customers`: Returns ids of customers directly accessible
   by the user authenticating the call.
 
+### Configuring and Namespacing Tools
+
+The Google Ads MCP server uses the `tools_config.yaml` to let you selectively enable or disable individual tools or tool categories (namespaces) and customize their namespace prefixes.
+
+A default `tools_config.yaml` with all tools enabled is provided at the root of the repository. To customize your installation, edit the default file according to your requirements. If the configuration file is missing or invalid at startup, the server will raise an error and fail to start.
+
+#### Configuration Example:
+```yaml
+namespaces:
+  # Option 1: Enable category 'customers' with default prefix -> "customers_list_accessible_customers"
+  customers: true
+
+  # Option 2: Enable category 'search' with a custom prefix -> "query_search"
+  search: "query"
+
+  # Option 3: Fine-grained control over tools in a category
+  metadata:
+    enabled: true
+    prefix: "metadata"
+    enabled_tools:
+      - get_resource_metadata: true
+```
+
+
 ### Resources available
+
 
 - `discovery-document`: Retrieve the Google Ads API discovery document. Provides the discovery document for the latest version of the Google Ads API, which describes the API surface, including resources, methods, and schemas. Host LLMs should access this resource to understand the structure of the Google Ads API and discover available features.
 - `metrics`: Retrieve information about the metrics available for reporting in the Google Ads API.
