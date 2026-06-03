@@ -2,7 +2,7 @@
   {
     "prompt": "List the customers I can access.",
     "expected_tool": "list_accessible_customers",
-    "prompt_tokens": 538,
+    "prompt_tokens": 528,
     "output_tokens": 12,
     "model": "gemini-flash-latest",
     "thought_tokens": 61,
@@ -11,79 +11,79 @@
   {
     "prompt": "Find campaigns matching 'Test Campaign' for customer {customer_id}.",
     "expected_tool": "search",
-    "prompt_tokens": 552,
+    "prompt_tokens": 542,
     "output_tokens": 20,
     "model": "gemini-flash-latest",
-    "thought_tokens": 80,
+    "thought_tokens": 72,
     "tool_tokens": 35429
   },
   {
     "prompt": "Show me all my accounts.",
     "expected_tool": "list_accessible_customers",
-    "prompt_tokens": 537,
+    "prompt_tokens": 527,
     "output_tokens": 12,
     "model": "gemini-flash-latest",
-    "thought_tokens": 46,
+    "thought_tokens": 40,
     "tool_tokens": 170
   },
   {
     "prompt": "Which customers do I have access to?",
     "expected_tool": "list_accessible_customers",
-    "prompt_tokens": 539,
+    "prompt_tokens": 529,
     "output_tokens": 12,
     "model": "gemini-flash-latest",
-    "thought_tokens": 66,
+    "thought_tokens": 63,
     "tool_tokens": 170
   },
   {
     "prompt": "Find enabled ad groups for customer {customer_id}.",
     "expected_tool": "search",
-    "prompt_tokens": 549,
+    "prompt_tokens": 539,
     "output_tokens": 22,
     "model": "gemini-flash-latest",
-    "thought_tokens": 93,
+    "thought_tokens": 88,
     "tool_tokens": 24699
   },
   {
     "prompt": "Get keywords for campaign 'Summer Sale' in account {customer_id}.",
     "expected_tool": "search",
-    "prompt_tokens": 553,
-    "output_tokens": 20,
+    "prompt_tokens": 543,
+    "output_tokens": 58,
     "model": "gemini-flash-latest",
-    "thought_tokens": 201,
-    "tool_tokens": 35429
+    "thought_tokens": 302,
+    "tool_tokens": 35
   },
   {
     "prompt": "Show me the metrics for customer {customer_id}.",
     "expected_tool": "search",
-    "prompt_tokens": 549,
+    "prompt_tokens": 539,
     "output_tokens": 20,
     "model": "gemini-flash-latest",
-    "thought_tokens": 150,
+    "thought_tokens": 130,
     "tool_tokens": 22703
   },
   {
     "prompt": "Generate a daily report of clicks for all active campaigns in account {customer_id}.",
     "expected_tool": "search",
-    "prompt_tokens": 555,
+    "prompt_tokens": 545,
     "output_tokens": 20,
-    "thought_tokens": 88,
+    "thought_tokens": 103,
     "model": "gemini-flash-latest",
     "tool_tokens": 35429
   },
   {
     "prompt": "What fields are available for the campaign resource?",
     "expected_tool": "get_resource_metadata",
-    "prompt_tokens": 540,
+    "prompt_tokens": 530,
     "output_tokens": 20,
-    "thought_tokens": 87,
+    "thought_tokens": 81,
     "model": "gemini-flash-latest",
     "tool_tokens": 35429
   },
   {
     "prompt": "Find metrics compatible with ad_group.",
     "expected_tool": "get_resource_metadata",
-    "prompt_tokens": 539,
+    "prompt_tokens": 529,
     "output_tokens": 22,
     "thought_tokens": 81,
     "model": "gemini-flash-latest",
@@ -92,9 +92,9 @@
   {
     "prompt": "What segments can I select with the customer resource?",
     "expected_tool": "get_resource_metadata",
-    "prompt_tokens": 541,
+    "prompt_tokens": 531,
     "output_tokens": 20,
-    "thought_tokens": 90,
+    "thought_tokens": 86,
     "model": "gemini-flash-latest",
     "tool_tokens": 22703
   }
