@@ -75,19 +75,12 @@
         "additionalProperties": false,
         "properties": {
           "conditions": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "List of conditions to filter the data, combined using AND clauses"
+            "default": [],
+            "description": "List of conditions to filter the data, combined using AND clauses",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "customer_id": {
             "description": "The id of the customer",
@@ -113,19 +106,12 @@
             "description": "The maximum number of rows to return"
           },
           "orderings": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "How the data is ordered"
+            "default": [],
+            "description": "How the data is ordered",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "resource": {
             "description": "The resource to return fields from",
