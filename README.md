@@ -22,7 +22,13 @@ to provide several
 
 The Google Ads MCP server uses the `tools_config.yaml` to let you selectively enable or disable individual tools or tool categories (namespaces) and customize their namespace prefixes.
 
-A default `tools_config.yaml` with all tools enabled is provided at the root of the repository. To customize your installation, edit the default file according to your requirements. If the configuration file is missing or invalid at startup, the server will raise an error and fail to start.
+A default `tools_config.yaml` with all tools enabled is bundled with the package, so the server works out of the box with no extra setup. To customize your installation, the server resolves the configuration in the following order:
+
+1. An explicit path set via the `GOOGLE_ADS_MCP_TOOLS_CONFIG` environment variable.
+2. A `tools_config.yaml` file in the current working directory.
+3. The default `tools_config.yaml` bundled with the package.
+
+If an explicitly requested configuration file (via the environment variable) is missing, or any resolved file is invalid, the server raises an error and fails to start.
 
 #### Configuration Example:
 ```yaml
