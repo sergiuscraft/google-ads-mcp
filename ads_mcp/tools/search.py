@@ -15,9 +15,12 @@
 """Tools for exposing the API Search method to the MCP server."""
 
 from typing import Any, Dict, List
-from ads_mcp.coordinator import mcp
+from fastmcp import FastMCP
 from fastmcp.tools import Tool
 from mcp.types import ToolAnnotations
+
+search_mcp = FastMCP("search")
+
 import ads_mcp.utils as utils
 from google.ads.googleads.errors import GoogleAdsException
 from fastmcp.exceptions import ToolError
@@ -138,6 +141,6 @@ def _search_tool_description() -> str:
 # provides the flexibility needed to generate the description while also
 # including the `search` method's docstring.
 search.__doc__ = _search_tool_description()
-mcp.add_tool(
+search_mcp.add_tool(
     Tool.from_function(search, annotations=ToolAnnotations(readOnlyHint=True))
 )
