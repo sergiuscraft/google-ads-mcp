@@ -30,8 +30,8 @@ def search(
     customer_id: str,
     fields: List[str],
     resource: str,
-    conditions: List[str] | None = None,
-    orderings: List[str] | None = None,
+    conditions: List[str] = [],
+    orderings: List[str] = [],
     limit: int | None = None,
 ) -> List[Dict[str, Any]]:
     """Fetches data from the Google Ads API using the search method
