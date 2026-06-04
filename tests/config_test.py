@@ -121,3 +121,57 @@ class TestToolsConfig(unittest.TestCase):
         mock_exists.return_value = True
         with self.assertRaises(ValueError):
             ToolsConfig.load("invalid.yaml")
+
+    @patch.dict("os.environ", {"GOOGLE_ADS_MCP_TOOLS_CONFIG": "/env/path.yaml"})
+    @patch("os.path.exists", return_value=True)
+    @patch(
+        "builtins.open",
+        new_callable=mock_open,
+        read_data="namespaces:\n  customers: true\n",
+    )
+    def test_load_uses_env_var_path(self, mock_file, mock_exists):
+        """Tests that the env var is honored when no explicit path is given."""
+        config = ToolsConfig.load()
+        mock_file.assert_called_once_with("/env/path.yaml", "r")
+        self.assertTrue(config.is_namespace_enabled("customers"))
+
+    @patch.dict(
+        "os.environ", {"GOOGLE_ADS_MCP_TOOLS_CONFIG": "/env/missing.yaml"}
+    )
+    @patch("os.path.exists", return_value=False)
+    def test_load_missing_env_var_path_raises(self, mock_exists):
+        """Tests that a missing env-var-specified config raises FileNotFoundError."""
+        with self.assertRaises(FileNotFoundError):
+            ToolsConfig.load()
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("ads_mcp.config.importlib.resources.files")
+    def test_load_falls_back_to_bundled_default(self, mock_files, mock_exists):
+        """Tests fallback to the package-bundled config when no local file exists."""
+        bundled = mock_files.return_value.joinpath.return_value
+        bundled.is_file.return_value = True
+        bundled.__str__ = lambda self: "/bundled/tools_config.yaml"
+        with patch(
+            "builtins.open",
+            new_callable=mock_open,
+            read_data="namespaces:\n  search: true\n",
+        ) as mock_file:
+            config = ToolsConfig.load()
+        mock_file.assert_called_once_with("/bundled/tools_config.yaml", "r")
+        self.assertTrue(config.is_namespace_enabled("search"))
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("ads_mcp.config.importlib.resources.files")
+    def test_load_without_any_config_enables_defaults(
+        self, mock_files, mock_exists
+    ):
+        """Tests that load falls back to all default namespaces if nothing resolves."""
+        mock_files.return_value.joinpath.return_value.is_file.return_value = (
+            False
+        )
+        config = ToolsConfig.load()
+        self.assertTrue(config.is_namespace_enabled("customers"))
+        self.assertTrue(config.is_namespace_enabled("search"))
+        self.assertTrue(config.is_namespace_enabled("metadata"))
