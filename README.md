@@ -391,23 +391,6 @@ be simpler.
 How many active campaigns do I have for customer id 1234567890
 ```
 
-## Skills
-
-This repository also provides [Agent Skills](https://agentskills.io/), which are specialized workflows and instructions that give AI agents specific expertise.
-
-### Skills available
-
-- `account-performance-diagnostics`: Diagnose account performance issues such as conversion loss, low lead flow, and lost opportunities. Located in `ads_mcp/skills/account-performance-diagnostics`.
-
-### How to install skills
-
-To use these skills, you need to point your skills-compatible AI agent to the skill directory.
-
-For example, if you are using [Antigravity CLI](https://antigravity.google/product/antigravity-cli), you can install the skill by copying the folder to your skills directory or referencing it. See the [Antigravity CLI documentation](https://antigravity.google/docs/skills) for detailed instructions.
-
-While that guide is specific to Antigravity CLI, Agent Skills are an open standard and can be loaded by any compatible agent or LLM tool that supports the format (e.g., Claude Code, Cursor).
-
-
 ## Contributing
 
 Contributions welcome! See the [Contributing Guide](CONTRIBUTING.md).
