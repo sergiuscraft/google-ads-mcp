@@ -33,6 +33,14 @@ except ImportError:
     HAS_REDIS = False
     RedisStore = None
 
+try:
+    from key_value.aio.stores.firestore import FirestoreStore
+
+    HAS_FIRESTORE = True
+except ImportError:
+    HAS_FIRESTORE = False
+    FirestoreStore = None
+
 from ads_mcp.auth_storage import create_client_storage
 
 
@@ -50,6 +58,8 @@ class TestAuthConfig(unittest.TestCase):
             "GOOGLE_ADS_MCP_STORAGE_TYPE",
             "GOOGLE_ADS_MCP_STORAGE_PATH",
             "GOOGLE_ADS_MCP_STORAGE_REDIS_URL",
+            "GOOGLE_ADS_MCP_STORAGE_FIRESTORE_PROJECT",
+            "GOOGLE_ADS_MCP_STORAGE_FIRESTORE_DATABASE",
             "GOOGLE_ADS_MCP_STORAGE_ENCRYPTION_KEY",
             "GOOGLE_ADS_MCP_STORAGE_DISABLE_ENCRYPTION",
             "GOOGLE_ADS_MCP_JWT_SIGNING_KEY",
@@ -115,6 +125,41 @@ class TestAuthConfig(unittest.TestCase):
         os.environ["GOOGLE_ADS_MCP_STORAGE_DISABLE_ENCRYPTION"] = "true"
         store = create_client_storage()
         self.assertIsInstance(store, RedisStore)
+
+    @unittest.skipUnless(HAS_FIRESTORE, "firestore package not installed")
+    @patch("key_value.aio.stores.firestore.FirestoreStore")
+    def test_create_client_storage_firestore(self, mock_store):
+        """Tests creating a firestore store.
+
+        The store is patched because building a real one resolves Application
+        Default Credentials, which are not available in every test
+        environment. The sanitization strategies are asserted because dropping
+        them would leave CIMD client ids, which are URLs, as invalid Firestore
+        document ids.
+        """
+        os.environ["GOOGLE_ADS_MCP_STORAGE_TYPE"] = "firestore"
+        os.environ["GOOGLE_ADS_MCP_STORAGE_FIRESTORE_PROJECT"] = "test-project"
+        os.environ["GOOGLE_ADS_MCP_STORAGE_FIRESTORE_DATABASE"] = "test-db"
+        os.environ["GOOGLE_ADS_MCP_STORAGE_DISABLE_ENCRYPTION"] = "true"
+        store = create_client_storage()
+        _, kwargs = mock_store.call_args
+        self.assertEqual(kwargs["project"], "test-project")
+        self.assertEqual(kwargs["database"], "test-db")
+        self.assertIn("key_sanitization_strategy", kwargs)
+        self.assertIn("collection_sanitization_strategy", kwargs)
+        self.assertIs(store, mock_store.return_value)
+
+    @unittest.skipUnless(HAS_FIRESTORE, "firestore package not installed")
+    @patch("key_value.aio.stores.firestore.FirestoreStore")
+    def test_create_client_storage_firestore_env_var(self, mock_store):
+        """Tests that the firestore project alone selects firestore."""
+        os.environ["GOOGLE_ADS_MCP_STORAGE_FIRESTORE_PROJECT"] = "test-project"
+        os.environ["GOOGLE_ADS_MCP_STORAGE_DISABLE_ENCRYPTION"] = "true"
+        store = create_client_storage()
+        _, kwargs = mock_store.call_args
+        self.assertEqual(kwargs["project"], "test-project")
+        self.assertIsNone(kwargs["database"])
+        self.assertIs(store, mock_store.return_value)
 
     def test_create_client_storage_disable_encryption(self):
         """Tests disabling encryption wrapper."""
