@@ -24,6 +24,10 @@ dev = [
     "black",
     "nox >=2025.5.1, <2026"
 ]
+firestore = [
+    # 0.4.5 is the first release exposing the Firestore sanitization strategies.
+    "py-key-value-aio[firestore] >=0.4.5, <0.5.0"
+]
 
 [project.urls]
 homepage = "https://github.com/googleads/google-ads-mcp"

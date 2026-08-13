@@ -25,17 +25,21 @@ if TYPE_CHECKING:
 def create_client_storage() -> Any:
     """Creates an AsyncKeyValue store for FastMCP client_storage based on environment variables.
 
-    Supports 'filetree', 'redis', and 'memory' storage backends.
+    Supports 'filetree', 'redis', 'firestore', and 'memory' storage backends.
     If no storage configuration is provided, returns None to allow FastMCP to use its
     default storage logic.
     """
     st_type = os.environ.get("GOOGLE_ADS_MCP_STORAGE_TYPE")
     st_path = os.environ.get("GOOGLE_ADS_MCP_STORAGE_PATH")
     r_url = os.environ.get("GOOGLE_ADS_MCP_STORAGE_REDIS_URL")
+    fs_project = os.environ.get("GOOGLE_ADS_MCP_STORAGE_FIRESTORE_PROJECT")
+    fs_database = os.environ.get("GOOGLE_ADS_MCP_STORAGE_FIRESTORE_DATABASE")
 
     if not st_type:
         if r_url:
             st_type = "redis"
+        elif fs_project or fs_database:
+            st_type = "firestore"
         elif st_path:
             st_type = "filetree"
         else:
@@ -59,13 +63,50 @@ def create_client_storage() -> Any:
 
         url_to_use = r_url or "redis://localhost:6379/0"
         store = RedisStore(url=url_to_use)
+    elif st_type == "firestore":
+        try:
+            from key_value.aio.stores.firestore import (
+                FirestoreStore,
+                FirestoreV1CollectionSanitizationStrategy,
+                FirestoreV1KeySanitizationStrategy,
+            )
+        except ImportError as exc:
+            raise ValueError(
+                "Firestore storage requires the firestore extra. Install it "
+                "with 'pip install py-key-value-aio[firestore]'."
+            ) from exc
+
+        from google.auth.exceptions import DefaultCredentialsError
+
+        # Both project and database are optional: when omitted, the store falls
+        # back to Application Default Credentials and the '(default)' database,
+        # which is what a Cloud Run deployment normally wants.
+        # The sanitization strategies are needed because CIMD client ids are
+        # URLs, and Firestore rejects the '/' they contain in a document id.
+        try:
+            store = FirestoreStore(
+                project=fs_project,
+                database=fs_database,
+                key_sanitization_strategy=(
+                    FirestoreV1KeySanitizationStrategy()
+                ),
+                collection_sanitization_strategy=(
+                    FirestoreV1CollectionSanitizationStrategy()
+                ),
+            )
+        except DefaultCredentialsError as exc:
+            raise ValueError(
+                "Firestore storage could not resolve Application Default "
+                "Credentials. Configure ADC for this environment, or set "
+                "GOOGLE_ADS_MCP_STORAGE_TYPE to a different backend."
+            ) from exc
     elif st_type == "memory":
         from key_value.aio.stores.memory import MemoryStore
 
         store = MemoryStore()
     else:
         raise ValueError(
-            f"Unsupported client storage type: '{st_type}'. Expected one of: filetree, redis, memory."
+            f"Unsupported client storage type: '{st_type}'. Expected one of: filetree, redis, firestore, memory."
         )
 
     dis_enc = os.environ.get(
