@@ -22,7 +22,7 @@ from google.protobuf.message import Message as PbMessage
 from google.protobuf.json_format import MessageToDict
 import logging
 from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.v24.services.services.google_ads_service import (
+from google.ads.googleads.v25.services.services.google_ads_service import (
     GoogleAdsServiceClient,
 )
 
