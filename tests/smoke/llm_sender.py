@@ -21,7 +21,7 @@ from google.genai import Client
 from google.genai import errors
 from tests.smoke import smoke_utils
 
-DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 def _strip_additional_properties(schema: dict) -> dict:
