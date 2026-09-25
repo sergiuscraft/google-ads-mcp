@@ -115,17 +115,64 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(utils.clean_customer_id(""), "")
 
     def test_get_login_customer_id(self):
-        """Tests that _get_login_customer_id sanitizes env variable or returns None if unset."""
+        """Tests that _get_login_customer_id resolves from parameter or env variable and sanitizes."""
         import os
         from unittest.mock import patch
 
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(utils._get_login_customer_id())
+            self.assertEqual(
+                utils._get_login_customer_id("999-888-7777"), "9998887777"
+            )
+            self.assertEqual(
+                utils._get_login_customer_id(9998887777), "9998887777"
+            )
 
         with patch.dict(
             os.environ, {"GOOGLE_ADS_LOGIN_CUSTOMER_ID": "123-456-7890"}
         ):
             self.assertEqual(utils._get_login_customer_id(), "1234567890")
+            # Explicit argument takes precedence over environment variable
+            self.assertEqual(
+                utils._get_login_customer_id("999-888-7777"), "9998887777"
+            )
+
+    def test_get_googleads_client_with_login_customer_id(self):
+        """Tests that _get_googleads_client passes login_customer_id when provided or set in env."""
+        import os
+        from unittest.mock import MagicMock, patch
+
+        with patch.dict(
+            os.environ,
+            {"GOOGLE_ADS_LOGIN_CUSTOMER_ID": "111-222-3333"},
+            clear=True,
+        ):
+            with patch.object(
+                utils, "_create_credentials", return_value=MagicMock()
+            ):
+                with patch("ads_mcp.utils.GoogleAdsClient") as mock_client:
+                    utils._get_googleads_client(
+                        login_customer_id="444-555-6666"
+                    )
+                    mock_client.assert_called_once()
+                    _, kwargs = mock_client.call_args
+                    self.assertEqual(
+                        kwargs.get("login_customer_id"), "4445556666"
+                    )
+
+    def test_get_googleads_service_passes_login_customer_id(self):
+        """Tests that get_googleads_service forwards login_customer_id to _get_googleads_client."""
+        from unittest.mock import MagicMock, patch
+
+        with patch.object(
+            utils, "_get_googleads_client", return_value=MagicMock()
+        ) as mock_get_client:
+            utils.get_googleads_service(
+                "GoogleAdsService", login_customer_id="123-456-7890"
+            )
+            mock_get_client.assert_called_once_with(
+                login_customer_id="123-456-7890"
+            )
 
     def test_get_developer_token(self):
         """Tests that _get_developer_token returns env variable or None if unset."""

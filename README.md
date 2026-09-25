@@ -344,8 +344,11 @@ popular clients.
 
 #### Login Customer Id
 
-If your access to the customer account is through a manager account, you will
-need to add the customer ID of the manager account to the settings file.
+If your access to the customer account is through a manager account, you can
+either provide the manager account's customer ID per tool call via the optional
+`login_customer_id` parameter, or set `GOOGLE_ADS_LOGIN_CUSTOMER_ID` in the
+settings file as a default (the per-call `login_customer_id` parameter takes
+precedence when specified).
 
 See [here](https://developers.google.com/google-ads/api/docs/concepts/call-structure#cid) for details.
 
