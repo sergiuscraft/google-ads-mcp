@@ -34,7 +34,7 @@ from ads_mcp.resources import (
 
 def configure_safe_http_logging() -> None:
     """Prevent OAuth access tokens in query strings from reaching INFO logs."""
-    logging.getLogger("httpx2").setLevel(logging.WARNING)
+    # logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
 def run_server() -> None:
