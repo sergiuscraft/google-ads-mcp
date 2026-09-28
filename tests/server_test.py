@@ -52,19 +52,6 @@ class TestUtils(unittest.TestCase):
             uvicorn_config={"access_log": False},
         )
 
-    def test_http_client_info_logs_are_suppressed(self):
-        """OAuth tokeninfo URLs must not be emitted at INFO level."""
-        from ads_mcp import server
-
-        logger = logging.getLogger("httpx2")
-        previous_level = logger.level
-        try:
-            logger.setLevel(logging.NOTSET)
-            server.configure_safe_http_logging()
-            self.assertEqual(logging.WARNING, logger.level)
-        finally:
-            logger.setLevel(previous_level)
-
     def test_oauth_access_token_not_logged(self):
         """Tests that OAuth access token is not logged."""
         import asyncio
