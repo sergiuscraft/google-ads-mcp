@@ -222,3 +222,142 @@ def add_negative_keywords(
         ),
         error_prefix="Failed to add negative keywords",
     )
+
+
+@keywords_mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)
+def update_keyword(
+    customer_id: str | int,
+    ad_group_id: str | int,
+    criterion_id: str | int,
+    status: Literal["PAUSED", "ENABLED"] | None = None,
+    cpc_bid: float | None = None,
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Pauses/enables a keyword and/or changes its max CPC. At least one of `status` or `cpc_bid` is required.
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        ad_group_id: Numeric ID of the ad group.
+        criterion_id: Numeric keyword criterion ID (`ad_group_criterion.criterion_id`).
+        status: Optional new status, PAUSED or ENABLED.
+        cpc_bid: Optional new max CPC in account currency units.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    ag_id = mh.require_numeric_id(ad_group_id, "ad_group_id")
+    crit = mh.require_numeric_id(criterion_id, "criterion_id")
+    if status is None and cpc_bid is None:
+        raise ToolError("Error: provide at least one of 'status' or 'cpc_bid'.")
+    if status is not None and status not in ("PAUSED", "ENABLED"):
+        raise ToolError("Error: 'status' must be PAUSED or ENABLED.")
+    bid_micros = mh.to_micros(cpc_bid, "cpc_bid") if cpc_bid is not None else None
+    ga_client, service = mh.get_client_and_service(
+        login_customer_id, "AdGroupCriterionService"
+    )
+    resource_name = f"customers/{cid}/adGroupCriteria/{ag_id}~{crit}"
+    op = ga_client.get_type("AdGroupCriterionOperation")
+    op.update.resource_name = resource_name
+    if status is not None:
+        op.update.status = ga_client.enums.AdGroupCriterionStatusEnum[status]
+        op.update_mask.paths.append("status")
+    if bid_micros is not None:
+        op.update.cpc_bid_micros = bid_micros
+        op.update_mask.paths.append("cpc_bid_micros")
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={
+            "tool": "update_keyword",
+            "rn": resource_name,
+            "status": status,
+            "cpc_bid_micros": bid_micros,
+        },
+        change_items=pac.build_change_items(
+            operation="UPDATE",
+            entity_readable="Keyword",
+            primary_key_readable=resource_name,
+            fields={"Status": status, "Max CPC": cpc_bid},
+        ),
+        mutate=lambda dry: service.mutate_ad_group_criteria(
+            request=mh.build_request(
+                ga_client,
+                "MutateAdGroupCriteriaRequest",
+                cid,
+                [op],
+                validate_only=dry,
+            )
+        ),
+        on_success=lambda _r: f"Keyword {crit} updated.",
+        error_prefix="Failed to update keyword",
+    )
+
+
+@keywords_mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+)
+def remove_keywords(
+    customer_id: str | int,
+    ad_group_id: str | int,
+    criterion_ids: list[str | int],
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Permanently removes keywords (or ad-group-level negatives) from an ad group. Cannot be undone; prefer pausing with `update_keyword`.
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        ad_group_id: Numeric ID of the ad group.
+        criterion_ids: 1-100 numeric criterion IDs to remove.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    ag_id = mh.require_numeric_id(ad_group_id, "ad_group_id")
+    crit_ids = mh.require_ids(criterion_ids, "criterion_ids")
+    ga_client, service = mh.get_client_and_service(
+        login_customer_id, "AdGroupCriterionService"
+    )
+    names = [f"customers/{cid}/adGroupCriteria/{ag_id}~{c}" for c in crit_ids]
+    ops = []
+    for rn in names:
+        op = ga_client.get_type("AdGroupCriterionOperation")
+        op.remove = rn
+        ops.append(op)
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={"tool": "remove_keywords", "rns": names},
+        change_items=pac.build_change_items(
+            operation="REMOVE",
+            entity_readable="Keyword",
+            primary_key_readable=f"ad group {ag_id}",
+            fields={"Criterion IDs": crit_ids},
+        ),
+        mutate=lambda dry: service.mutate_ad_group_criteria(
+            request=mh.build_request(
+                ga_client, "MutateAdGroupCriteriaRequest", cid, ops, validate_only=dry
+            )
+        ),
+        on_success=lambda r: f"Removed {len(r.results)} keyword(s).",
+        error_prefix="Failed to remove keywords",
+    )

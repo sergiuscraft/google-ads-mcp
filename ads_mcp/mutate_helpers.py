@@ -88,6 +88,23 @@ def build_request(
     return request
 
 
+def get_client_and_service(
+    login_customer_id: str | int | None, service_name: str
+) -> tuple[Any, Any]:
+    """Returns ``(ga_client, service)`` with the MCP telemetry interceptor."""
+    ga_client = utils.get_googleads_client(login_customer_id=login_customer_id)
+    return ga_client, utils.get_googleads_service_from_client(
+        ga_client, service_name
+    )
+
+
+def require_ids(values: Sequence[str | int] | None, name: str) -> list[str]:
+    """Validates a non-empty list of numeric IDs (max 100)."""
+    if not values or len(values) > 100:
+        raise ToolError(f"Error: '{name}' needs between 1 and 100 IDs.")
+    return [require_numeric_id(v, name) for v in values]
+
+
 def run_mutation(
     *,
     customer_id: str,

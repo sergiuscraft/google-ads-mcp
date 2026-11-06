@@ -27,7 +27,12 @@ DEFAULT_CONFIG_FILE = "tools_config.yaml"
 # Environment variable used to point the server at an explicit config file.
 CONFIG_PATH_ENV_VAR = "GOOGLE_ADS_MCP_TOOLS_CONFIG"
 
-# Default categories that are supported by the server
+# Default categories that are supported by the server.
+#
+# NOTE: there is intentionally no "research" category (Keyword Planner /
+# KeywordPlanIdeaService, i.e. a suggest_keyword_ideas tool). It was built and
+# removed: the API rejects it for explorer-access projects (it needs Basic or
+# Standard access). Do not re-add it unless that access has been granted.
 ALL_CATEGORIES = [
     "customers",
     "search",
@@ -38,6 +43,9 @@ ALL_CATEGORIES = [
     "ad_groups",
     "keywords",
     "ads",
+    "asset_links",
+    "targeting",
+    "conversions",
 ]
 
 

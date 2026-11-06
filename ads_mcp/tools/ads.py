@@ -135,3 +135,121 @@ def create_responsive_search_ad(
         on_success=_done,
         error_prefix="Failed to create responsive search ad",
     )
+
+
+@ads_mcp_server.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)
+def update_ad_group_ad(
+    customer_id: str | int,
+    ad_group_id: str | int,
+    ad_id: str | int,
+    status: Literal["PAUSED", "ENABLED"],
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Pauses or enables an existing ad. Enabling can start spending money.
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        ad_group_id: Numeric ID of the ad group that contains the ad.
+        ad_id: Numeric ad ID (`ad_group_ad.ad.id`).
+        status: PAUSED or ENABLED.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    ag_id = mh.require_numeric_id(ad_group_id, "ad_group_id")
+    ad = mh.require_numeric_id(ad_id, "ad_id")
+    if status not in ("PAUSED", "ENABLED"):
+        raise ToolError("Error: 'status' must be PAUSED or ENABLED.")
+    ga_client, service = mh.get_client_and_service(
+        login_customer_id, "AdGroupAdService"
+    )
+    resource_name = f"customers/{cid}/adGroupAds/{ag_id}~{ad}"
+    op = ga_client.get_type("AdGroupAdOperation")
+    op.update.resource_name = resource_name
+    op.update.status = ga_client.enums.AdGroupAdStatusEnum[status]
+    op.update_mask.paths.append("status")
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={"tool": "update_ad_group_ad", "rn": resource_name, "status": status},
+        change_items=pac.build_change_items(
+            operation="UPDATE",
+            entity_readable="Ad",
+            primary_key_readable=resource_name,
+            fields={"Status": status},
+        ),
+        mutate=lambda dry: service.mutate_ad_group_ads(
+            request=mh.build_request(
+                ga_client, "MutateAdGroupAdsRequest", cid, [op], validate_only=dry
+            )
+        ),
+        on_success=lambda _r: f"Ad {ad} is now {status}.",
+        error_prefix="Failed to update ad",
+    )
+
+
+@ads_mcp_server.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+)
+def remove_ad_group_ad(
+    customer_id: str | int,
+    ad_group_id: str | int,
+    ad_id: str | int,
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Permanently removes an ad (cannot be undone; prefer pausing with `update_ad_group_ad`).
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        ad_group_id: Numeric ID of the ad group that contains the ad.
+        ad_id: Numeric ad ID.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    ag_id = mh.require_numeric_id(ad_group_id, "ad_group_id")
+    ad = mh.require_numeric_id(ad_id, "ad_id")
+    ga_client, service = mh.get_client_and_service(
+        login_customer_id, "AdGroupAdService"
+    )
+    resource_name = f"customers/{cid}/adGroupAds/{ag_id}~{ad}"
+    op = ga_client.get_type("AdGroupAdOperation")
+    op.remove = resource_name
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={"tool": "remove_ad_group_ad", "rn": resource_name},
+        change_items=pac.build_change_items(
+            operation="REMOVE",
+            entity_readable="Ad",
+            primary_key_readable=resource_name,
+            fields={"Resource": resource_name},
+        ),
+        mutate=lambda dry: service.mutate_ad_group_ads(
+            request=mh.build_request(
+                ga_client, "MutateAdGroupAdsRequest", cid, [op], validate_only=dry
+            )
+        ),
+        on_success=lambda _r: f"Ad {ad} removed.",
+        error_prefix="Failed to remove ad",
+    )

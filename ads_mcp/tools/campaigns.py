@@ -347,3 +347,108 @@ def update_campaign_budget(
         ),
         error_prefix="Failed to update campaign budget",
     )
+
+
+@campaigns_mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)
+def update_campaign(
+    customer_id: str | int,
+    campaign_id: str | int,
+    name: str | None = None,
+    bidding_strategy: (
+        Literal["MANUAL_CPC", "MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS"] | None
+    ) = None,
+    include_search_partners: bool | None = None,
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Updates an existing campaign's name, bidding strategy and/or search-partner setting.
+
+    Changing the bidding strategy changes how money is spent. At least one field is required.
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        campaign_id: Numeric campaign ID.
+        name: Optional new name.
+        bidding_strategy: Optional new strategy: MANUAL_CPC, MAXIMIZE_CLICKS or MAXIMIZE_CONVERSIONS.
+        include_search_partners: Optional; serve on Google search partner sites.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    camp_id = mh.require_numeric_id(campaign_id, "campaign_id")
+    if name is None and bidding_strategy is None and include_search_partners is None:
+        raise ToolError("Error: provide at least one field to update.")
+    if name is not None and not name.strip():
+        raise ToolError("Error: 'name' must not be empty.")
+    if bidding_strategy is not None and bidding_strategy not in _BIDDING:
+        raise ToolError(f"Error: 'bidding_strategy' must be one of {_BIDDING}.")
+
+    ga_client, service = mh.get_client_and_service(
+        login_customer_id, "CampaignService"
+    )
+    resource_name = f"customers/{cid}/campaigns/{camp_id}"
+    op = ga_client.get_type("CampaignOperation")
+    campaign = op.update
+    campaign.resource_name = resource_name
+    paths = op.update_mask.paths
+    if name is not None:
+        campaign.name = name.strip()
+        paths.append("name")
+    if include_search_partners is not None:
+        campaign.network_settings.target_search_network = include_search_partners
+        paths.append("network_settings.target_search_network")
+    # Google rejects masks that name a message ("field with subfields"), so the
+    # mask names a leaf of the strategy message; copy_from marks the oneof as set.
+    if bidding_strategy == "MANUAL_CPC":
+        campaign.manual_cpc.enhanced_cpc_enabled = False
+        paths.append("manual_cpc.enhanced_cpc_enabled")
+    elif bidding_strategy == "MAXIMIZE_CLICKS":
+        ga_client.copy_from(
+            campaign.target_spend, ga_client.get_type("TargetSpend")
+        )
+        paths.append("target_spend.cpc_bid_ceiling_micros")
+    elif bidding_strategy == "MAXIMIZE_CONVERSIONS":
+        ga_client.copy_from(
+            campaign.maximize_conversions,
+            ga_client.get_type("MaximizeConversions"),
+        )
+        paths.append("maximize_conversions.target_cpa_micros")
+
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={
+            "tool": "update_campaign",
+            "rn": resource_name,
+            "name": name,
+            "bidding_strategy": bidding_strategy,
+            "include_search_partners": include_search_partners,
+        },
+        change_items=pac.build_change_items(
+            operation="UPDATE",
+            entity_readable="Campaign",
+            primary_key_readable=resource_name,
+            fields={
+                "Name": name,
+                "Bidding strategy": bidding_strategy,
+                "Search partners": include_search_partners,
+            },
+        ),
+        mutate=lambda dry: service.mutate_campaigns(
+            request=mh.build_request(
+                ga_client, "MutateCampaignsRequest", cid, [op], validate_only=dry
+            )
+        ),
+        on_success=lambda _r: f"Campaign {camp_id} updated.",
+        error_prefix="Failed to update campaign",
+    )
