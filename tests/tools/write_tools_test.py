@@ -144,6 +144,52 @@ class CampaignTests(WriteToolsBase):
                 customer_id="1", campaign_id="1; DROP", status="PAUSED"
             )
 
+    def _budget_row(self, old_micros=10_000_000, refs=1, shared=False):
+        row = MagicMock()
+        row.campaign.campaign_budget = "customers/1/campaignBudgets/55"
+        row.campaign_budget.amount_micros = old_micros
+        row.campaign_budget.reference_count = refs
+        row.campaign_budget.explicitly_shared = shared
+        return row
+
+    def test_update_budget(self):
+        self._get_service("GoogleAdsService").search.return_value = [
+            self._budget_row()
+        ]
+        svc = self._get_service("CampaignBudgetService")
+        proposal, result = self.propose_then_commit(
+            campaigns.update_campaign_budget,
+            customer_id="1",
+            campaign_id="42",
+            daily_budget=20,
+        )
+        op = svc.mutate_campaign_budgets.call_args.kwargs["operations"][0]
+        self.assertEqual(
+            op.update.resource_name, "customers/1/campaignBudgets/55"
+        )
+        self.assertEqual(op.update.amount_micros, 20_000_000)
+        self.assertEqual(list(op.update_mask.paths), ["amount_micros"])
+        self.assertIn("10.00 to 20.00", result)
+        self.assertNotIn("WARNING", json.dumps(proposal))
+
+    def test_update_budget_warns_when_shared(self):
+        self._get_service("GoogleAdsService").search.return_value = [
+            self._budget_row(refs=3, shared=True)
+        ]
+        proposal = json.loads(
+            campaigns.update_campaign_budget(
+                customer_id="1", campaign_id="42", daily_budget=20
+            )
+        )
+        self.assertIn("shared by 3 campaigns", json.dumps(proposal))
+
+    def test_update_budget_unknown_campaign(self):
+        self._get_service("GoogleAdsService").search.return_value = []
+        with self.assertRaises(ToolError):
+            campaigns.update_campaign_budget(
+                customer_id="1", campaign_id="42", daily_budget=20
+            )
+
 
 class AdGroupTests(WriteToolsBase):
     def test_create_ad_group(self):
