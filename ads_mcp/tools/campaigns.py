@@ -15,7 +15,96 @@ import ads_mcp.utils as utils
 
 campaigns_mcp = FastMCP("campaigns")
 
-_BIDDING = ("MANUAL_CPC", "MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS")
+_BIDDING = (
+    "MANUAL_CPC",
+    "MAXIMIZE_CLICKS",
+    "MAXIMIZE_CONVERSIONS",
+    "MAXIMIZE_CONVERSION_VALUE",
+)
+BiddingStrategy = Literal[
+    "MANUAL_CPC",
+    "MAXIMIZE_CLICKS",
+    "MAXIMIZE_CONVERSIONS",
+    "MAXIMIZE_CONVERSION_VALUE",
+]
+
+
+def _check_bidding(
+    strategy: str | None,
+    target_cpa: float | None,
+    target_roas: float | None,
+    max_cpc_limit: float | None,
+) -> tuple[int | None, float | None, int | None]:
+    """Validates a strategy with its optional goal; returns (cpa_micros, roas, ceiling_micros).
+
+    A goal is only valid together with the strategy it belongs to, so what
+    changes is always explicit:
+    MAXIMIZE_CONVERSIONS + target_cpa, MAXIMIZE_CONVERSION_VALUE + target_roas,
+    MAXIMIZE_CLICKS + max_cpc_limit.
+    """
+    if strategy is not None and strategy not in _BIDDING:
+        raise ToolError(f"Error: 'bidding_strategy' must be one of {_BIDDING}.")
+    if target_cpa is not None and strategy != "MAXIMIZE_CONVERSIONS":
+        raise ToolError(
+            "Error: 'target_cpa' needs bidding_strategy=MAXIMIZE_CONVERSIONS."
+        )
+    if target_roas is not None and strategy != "MAXIMIZE_CONVERSION_VALUE":
+        raise ToolError(
+            "Error: 'target_roas' needs bidding_strategy=MAXIMIZE_CONVERSION_VALUE."
+        )
+    if max_cpc_limit is not None and strategy != "MAXIMIZE_CLICKS":
+        raise ToolError(
+            "Error: 'max_cpc_limit' needs bidding_strategy=MAXIMIZE_CLICKS."
+        )
+    cpa = mh.to_micros(target_cpa, "target_cpa") if target_cpa is not None else None
+    ceiling = (
+        mh.to_micros(max_cpc_limit, "max_cpc_limit")
+        if max_cpc_limit is not None
+        else None
+    )
+    if target_roas is not None and not 0 < target_roas <= 1000:
+        raise ToolError(
+            "Error: 'target_roas' must be a ratio between 0 and 1000 (4.0 = 400%)."
+        )
+    return cpa, target_roas, ceiling
+
+
+def _apply_bidding(
+    ga_client,
+    campaign,
+    strategy: str,
+    cpa_micros: int | None,
+    roas: float | None,
+    ceiling_micros: int | None,
+) -> str:
+    """Sets the strategy (and goal) on ``campaign``; returns the update-mask path.
+
+    Google rejects masks that name a whole message, so the path names a leaf
+    of the strategy message; copy_from marks the oneof as set.
+    """
+    if strategy == "MANUAL_CPC":
+        campaign.manual_cpc.enhanced_cpc_enabled = False
+        return "manual_cpc.enhanced_cpc_enabled"
+    if strategy == "MAXIMIZE_CLICKS":
+        # In the API, "Maximize clicks" is the `target_spend` strategy.
+        ga_client.copy_from(campaign.target_spend, ga_client.get_type("TargetSpend"))
+        if ceiling_micros is not None:
+            campaign.target_spend.cpc_bid_ceiling_micros = ceiling_micros
+        return "target_spend.cpc_bid_ceiling_micros"
+    if strategy == "MAXIMIZE_CONVERSIONS":
+        ga_client.copy_from(
+            campaign.maximize_conversions, ga_client.get_type("MaximizeConversions")
+        )
+        if cpa_micros is not None:
+            campaign.maximize_conversions.target_cpa_micros = cpa_micros
+        return "maximize_conversions.target_cpa_micros"
+    ga_client.copy_from(
+        campaign.maximize_conversion_value,
+        ga_client.get_type("MaximizeConversionValue"),
+    )
+    if roas is not None:
+        campaign.maximize_conversion_value.target_roas = roas
+    return "maximize_conversion_value.target_roas"
 
 
 @campaigns_mcp.tool(
@@ -25,9 +114,10 @@ def create_campaign(
     customer_id: str | int,
     name: str,
     daily_budget: float,
-    bidding_strategy: Literal[
-        "MANUAL_CPC", "MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS"
-    ] = "MAXIMIZE_CLICKS",
+    bidding_strategy: BiddingStrategy = "MAXIMIZE_CLICKS",
+    target_cpa: float | None = None,
+    target_roas: float | None = None,
+    max_cpc_limit: float | None = None,
     status: Literal["PAUSED", "ENABLED"] = "PAUSED",
     include_search_partners: bool = False,
     contains_eu_political_advertising: bool = False,
@@ -49,7 +139,10 @@ def create_campaign(
         customer_id: Google Ads Customer ID (digits or hyphenated).
         name: Campaign name. Must be unique among non-removed campaigns.
         daily_budget: Daily budget in the account's currency units (e.g. 25.5).
-        bidding_strategy: MANUAL_CPC, MAXIMIZE_CLICKS or MAXIMIZE_CONVERSIONS.
+        bidding_strategy: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS or MAXIMIZE_CONVERSION_VALUE. The conversion-based strategies need working conversion tracking.
+        target_cpa: Optional target cost per conversion (account currency); only with MAXIMIZE_CONVERSIONS.
+        target_roas: Optional target return on ad spend as a ratio (4.0 = 400%); only with MAXIMIZE_CONVERSION_VALUE.
+        max_cpc_limit: Optional ceiling for a single click's bid (account currency); only with MAXIMIZE_CLICKS.
         status: PAUSED (default, safe) or ENABLED.
         include_search_partners: Also serve on Google search partner sites.
         contains_eu_political_advertising: Declaration required by Google Ads.
@@ -62,8 +155,9 @@ def create_campaign(
         raise ToolError("Error: 'name' is required.")
     name = name.strip()
     budget_micros = mh.to_micros(daily_budget, "daily_budget")
-    if bidding_strategy not in _BIDDING:
-        raise ToolError(f"Error: 'bidding_strategy' must be one of {_BIDDING}.")
+    cpa_micros, roas, ceiling_micros = _check_bidding(
+        bidding_strategy, target_cpa, target_roas, max_cpc_limit
+    )
 
     ga_client = utils.get_googleads_client(login_customer_id=login_customer_id)
     service = utils.get_googleads_service_from_client(
@@ -96,24 +190,18 @@ def create_campaign(
         if contains_eu_political_advertising
         else ga_client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
     )
-    if bidding_strategy == "MANUAL_CPC":
-        campaign.manual_cpc.enhanced_cpc_enabled = False
-    elif bidding_strategy == "MAXIMIZE_CLICKS":
-        # In the API, "Maximize clicks" is the `target_spend` strategy.
-        ga_client.copy_from(
-            campaign.target_spend, ga_client.get_type("TargetSpend")
-        )
-    else:
-        ga_client.copy_from(
-            campaign.maximize_conversions,
-            ga_client.get_type("MaximizeConversions"),
-        )
+    _apply_bidding(
+        ga_client, campaign, bidding_strategy, cpa_micros, roas, ceiling_micros
+    )
 
     payload = {
         "tool": "create_campaign",
         "name": name,
         "daily_budget_micros": budget_micros,
         "bidding_strategy": bidding_strategy,
+        "target_cpa_micros": cpa_micros,
+        "target_roas": roas,
+        "max_cpc_limit_micros": ceiling_micros,
         "status": status,
         "include_search_partners": include_search_partners,
         "contains_eu_political_advertising": contains_eu_political_advertising,
@@ -126,6 +214,9 @@ def create_campaign(
             "Name": name,
             "Daily budget": daily_budget,
             "Bidding strategy": bidding_strategy,
+            "Target CPA": target_cpa,
+            "Target ROAS": target_roas,
+            "Max CPC limit": max_cpc_limit,
             "Status": status,
             "Channel": "SEARCH",
             "Search partners": include_search_partners,
@@ -356,9 +447,10 @@ def update_campaign(
     customer_id: str | int,
     campaign_id: str | int,
     name: str | None = None,
-    bidding_strategy: (
-        Literal["MANUAL_CPC", "MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS"] | None
-    ) = None,
+    bidding_strategy: BiddingStrategy | None = None,
+    target_cpa: float | None = None,
+    target_roas: float | None = None,
+    max_cpc_limit: float | None = None,
     include_search_partners: bool | None = None,
     login_customer_id: str | int | None = None,
     validate_only: bool = True,
@@ -377,7 +469,10 @@ def update_campaign(
         customer_id: Google Ads Customer ID (digits or hyphenated).
         campaign_id: Numeric campaign ID.
         name: Optional new name.
-        bidding_strategy: Optional new strategy: MANUAL_CPC, MAXIMIZE_CLICKS or MAXIMIZE_CONVERSIONS.
+        bidding_strategy: Optional new strategy: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS or MAXIMIZE_CONVERSION_VALUE. A goal below must always be sent together with its strategy.
+        target_cpa: Optional target cost per conversion (account currency); only with MAXIMIZE_CONVERSIONS.
+        target_roas: Optional target return on ad spend as a ratio (4.0 = 400%); only with MAXIMIZE_CONVERSION_VALUE.
+        max_cpc_limit: Optional ceiling for a single click's bid; only with MAXIMIZE_CLICKS.
         include_search_partners: Optional; serve on Google search partner sites.
         login_customer_id: Optional manager customer ID for the login-customer-id header.
         validate_only: If True (default), only validates and returns a proposal with a `checksum`.
@@ -389,8 +484,9 @@ def update_campaign(
         raise ToolError("Error: provide at least one field to update.")
     if name is not None and not name.strip():
         raise ToolError("Error: 'name' must not be empty.")
-    if bidding_strategy is not None and bidding_strategy not in _BIDDING:
-        raise ToolError(f"Error: 'bidding_strategy' must be one of {_BIDDING}.")
+    cpa_micros, roas, ceiling_micros = _check_bidding(
+        bidding_strategy, target_cpa, target_roas, max_cpc_limit
+    )
 
     ga_client, service = mh.get_client_and_service(
         login_customer_id, "CampaignService"
@@ -406,22 +502,12 @@ def update_campaign(
     if include_search_partners is not None:
         campaign.network_settings.target_search_network = include_search_partners
         paths.append("network_settings.target_search_network")
-    # Google rejects masks that name a message ("field with subfields"), so the
-    # mask names a leaf of the strategy message; copy_from marks the oneof as set.
-    if bidding_strategy == "MANUAL_CPC":
-        campaign.manual_cpc.enhanced_cpc_enabled = False
-        paths.append("manual_cpc.enhanced_cpc_enabled")
-    elif bidding_strategy == "MAXIMIZE_CLICKS":
-        ga_client.copy_from(
-            campaign.target_spend, ga_client.get_type("TargetSpend")
+    if bidding_strategy is not None:
+        paths.append(
+            _apply_bidding(
+                ga_client, campaign, bidding_strategy, cpa_micros, roas, ceiling_micros
+            )
         )
-        paths.append("target_spend.cpc_bid_ceiling_micros")
-    elif bidding_strategy == "MAXIMIZE_CONVERSIONS":
-        ga_client.copy_from(
-            campaign.maximize_conversions,
-            ga_client.get_type("MaximizeConversions"),
-        )
-        paths.append("maximize_conversions.target_cpa_micros")
 
     return mh.run_mutation(
         customer_id=cid,
@@ -432,6 +518,9 @@ def update_campaign(
             "rn": resource_name,
             "name": name,
             "bidding_strategy": bidding_strategy,
+            "target_cpa_micros": cpa_micros,
+            "target_roas": roas,
+            "max_cpc_limit_micros": ceiling_micros,
             "include_search_partners": include_search_partners,
         },
         change_items=pac.build_change_items(
@@ -441,6 +530,9 @@ def update_campaign(
             fields={
                 "Name": name,
                 "Bidding strategy": bidding_strategy,
+                "Target CPA": target_cpa,
+                "Target ROAS": target_roas,
+                "Max CPC limit": max_cpc_limit,
                 "Search partners": include_search_partners,
             },
         ),
