@@ -25,7 +25,6 @@ class WriteToolsBase(unittest.TestCase):
     def setUpClass(cls):
         cls.real = GoogleAdsClient(
             credentials=AnonymousCredentials(),
-            developer_token="fake-token",
             use_proto_plus=True,
         )
 

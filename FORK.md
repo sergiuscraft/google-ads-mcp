@@ -108,9 +108,9 @@ change.
 - **Existing campaigns may be in audience TARGETING mode** (`bid_only=false`).
   Attaching a list without changing the mode would restrict ads to its members,
   so the audience tools set the mode explicitly in the same request.
-- **Explorer access rejects Keyword Planner** with
-  `DEVELOPER_TOKEN_NOT_APPROVED`. A `suggest_keyword_ideas` tool was built and
-  removed for that reason.
+- **Keyword Planner is rejected by the API for this setup** (access not
+  approved). A `suggest_keyword_ideas` tool was built and removed for that
+  reason.
 - **Imported conversion actions cannot be changed through the API.** Conversion
   actions of type `UNIVERSAL_ANALYTICS_GOAL` (imported from Analytics) return
   "Mutates are not allowed for the requested resource"; only natively created
@@ -130,10 +130,9 @@ change.
 ## Deliberately not included
 
 - **Keyword Planner** (`KeywordPlanIdeaService`, a `suggest_keyword_ideas`
-  tool). It was built and removed: the API rejects it with
-  `DEVELOPER_TOKEN_NOT_APPROVED` for projects on *explorer* access (it needs
-  Basic or Standard). Do not re-add it unless that access has been granted. A
-  note to this effect sits in `ads_mcp/config.py`.
+  tool). It was built and removed: the API rejects it ("not approved") for the
+  access level this server was developed against. Do not re-add it unless that
+  access has been granted. A note to this effect sits in `ads_mcp/config.py`.
 - A raw "apply any mutate" escape hatch (it would bypass the typed validation).
 - Billing, account access and linking services.
 
@@ -161,9 +160,8 @@ claude mcp add google-ads \
   -- uv run --directory /path/to/this/checkout -m ads_mcp.server
 ```
 
-- `GOOGLE_ADS_DEVELOPER_TOKEN` is optional in this server (it is only sent when
-  set). The setup this fork was developed against ran without one, on explorer
-  access.
+- This server does not use or send a developer token; credentials come from
+  Application Default Credentials only.
 - `login_customer_id`: set it to the manager (MCC) ID when reaching a client
   account through a manager; for an account accessed directly, use that
   account's own ID. A wrong value gives `User doesn't have permission to access
