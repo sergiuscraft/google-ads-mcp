@@ -18,5 +18,6 @@ namespaces:
   conversions: true
   shared_sets: true
   scheduling: true
+  budgets: true
   # No "research" (suggest_keyword_ideas) on purpose: Keyword Planner needs Basic/Standard
   # API access, explorer access is rejected. Removed; not to be re-added.

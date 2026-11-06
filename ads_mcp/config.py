@@ -48,6 +48,7 @@ ALL_CATEGORIES = [
     "conversions",
     "shared_sets",
     "scheduling",
+    "budgets",
 ]
 
 

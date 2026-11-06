@@ -113,7 +113,8 @@ def _apply_bidding(
 def create_campaign(
     customer_id: str | int,
     name: str,
-    daily_budget: float,
+    daily_budget: float | None = None,
+    existing_budget_id: str | int | None = None,
     bidding_strategy: BiddingStrategy = "MAXIMIZE_CLICKS",
     target_cpa: float | None = None,
     target_roas: float | None = None,
@@ -125,7 +126,9 @@ def create_campaign(
     validate_only: bool = True,
     checksum: str | None = None,
 ) -> str:
-    """Creates a Search campaign together with its own daily budget.
+    """Creates a Search campaign with its own new daily budget, or on an existing (e.g. shared) budget.
+
+    Give exactly one of `daily_budget` (a new budget is created for this campaign) or `existing_budget_id`.
 
     The campaign is created PAUSED by default and targets Google Search only
     (Display network is off; Search partners are optional).
@@ -138,7 +141,8 @@ def create_campaign(
     Args:
         customer_id: Google Ads Customer ID (digits or hyphenated).
         name: Campaign name. Must be unique among non-removed campaigns.
-        daily_budget: Daily budget in the account's currency units (e.g. 25.5).
+        daily_budget: Daily budget in the account's currency units (e.g. 25.5) for a new budget of this campaign.
+        existing_budget_id: Numeric ID of an existing budget to use instead (see `create_campaign_budget`). A budget that is not shared can serve only one campaign.
         bidding_strategy: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS or MAXIMIZE_CONVERSION_VALUE. The conversion-based strategies need working conversion tracking.
         target_cpa: Optional target cost per conversion (account currency); only with MAXIMIZE_CONVERSIONS.
         target_roas: Optional target return on ad spend as a ratio (4.0 = 400%); only with MAXIMIZE_CONVERSION_VALUE.
@@ -154,7 +158,18 @@ def create_campaign(
     if not name or not name.strip():
         raise ToolError("Error: 'name' is required.")
     name = name.strip()
-    budget_micros = mh.to_micros(daily_budget, "daily_budget")
+    if (daily_budget is None) == (existing_budget_id is None):
+        raise ToolError(
+            "Error: give exactly one of 'daily_budget' or 'existing_budget_id'."
+        )
+    budget_micros = (
+        mh.to_micros(daily_budget, "daily_budget") if daily_budget is not None else None
+    )
+    existing_budget = (
+        mh.require_numeric_id(existing_budget_id, "existing_budget_id")
+        if existing_budget_id is not None
+        else None
+    )
     cpa_micros, roas, ceiling_micros = _check_bidding(
         bidding_strategy, target_cpa, target_roas, max_cpc_limit
     )
@@ -164,15 +179,19 @@ def create_campaign(
         ga_client, "GoogleAdsService"
     )
 
-    temp_budget = f"customers/{cid}/campaignBudgets/-1"
-
-    budget_op = ga_client.get_type("MutateOperation")
-    budget = budget_op.campaign_budget_operation.create
-    budget.resource_name = temp_budget
-    budget.name = f"{name} budget"
-    budget.amount_micros = budget_micros
-    budget.delivery_method = ga_client.enums.BudgetDeliveryMethodEnum.STANDARD
-    budget.explicitly_shared = False
+    operations = []
+    if existing_budget is not None:
+        budget_rn = f"customers/{cid}/campaignBudgets/{existing_budget}"
+    else:
+        budget_rn = f"customers/{cid}/campaignBudgets/-1"
+        budget_op = ga_client.get_type("MutateOperation")
+        budget = budget_op.campaign_budget_operation.create
+        budget.resource_name = budget_rn
+        budget.name = f"{name} budget"
+        budget.amount_micros = budget_micros
+        budget.delivery_method = ga_client.enums.BudgetDeliveryMethodEnum.STANDARD
+        budget.explicitly_shared = False
+        operations.append(budget_op)
 
     campaign_op = ga_client.get_type("MutateOperation")
     campaign = campaign_op.campaign_operation.create
@@ -181,7 +200,7 @@ def create_campaign(
     campaign.advertising_channel_type = (
         ga_client.enums.AdvertisingChannelTypeEnum.SEARCH
     )
-    campaign.campaign_budget = temp_budget
+    campaign.campaign_budget = budget_rn
     campaign.network_settings.target_google_search = True
     campaign.network_settings.target_search_network = include_search_partners
     campaign.network_settings.target_content_network = False
@@ -193,11 +212,13 @@ def create_campaign(
     _apply_bidding(
         ga_client, campaign, bidding_strategy, cpa_micros, roas, ceiling_micros
     )
+    operations.append(campaign_op)
 
     payload = {
         "tool": "create_campaign",
         "name": name,
         "daily_budget_micros": budget_micros,
+        "existing_budget": existing_budget,
         "bidding_strategy": bidding_strategy,
         "target_cpa_micros": cpa_micros,
         "target_roas": roas,
@@ -213,6 +234,7 @@ def create_campaign(
         fields={
             "Name": name,
             "Daily budget": daily_budget,
+            "Existing budget ID": existing_budget,
             "Bidding strategy": bidding_strategy,
             "Target CPA": target_cpa,
             "Target ROAS": target_roas,
@@ -231,7 +253,7 @@ def create_campaign(
                 ga_client,
                 "MutateGoogleAdsRequest",
                 cid,
-                [budget_op, campaign_op],
+                operations,
                 validate_only=dry_run,
                 operations_field="mutate_operations",
             )
@@ -239,7 +261,7 @@ def create_campaign(
 
     def _done(response) -> str:
         campaign_rn = response.mutate_operation_responses[
-            1
+            len(operations) - 1
         ].campaign_result.resource_name
         return (
             f"Successfully created campaign '{name}' ({status}). "
