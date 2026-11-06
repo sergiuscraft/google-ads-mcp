@@ -9,3 +9,7 @@ namespaces:
   metadata: true
   labels: true
   assets: true
+  campaigns: true
+  ad_groups: true
+  keywords: true
+  ads: true
