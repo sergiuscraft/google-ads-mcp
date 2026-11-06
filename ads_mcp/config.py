@@ -47,6 +47,7 @@ ALL_CATEGORIES = [
     "targeting",
     "conversions",
     "shared_sets",
+    "scheduling",
 ]
 
 
