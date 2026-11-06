@@ -3,8 +3,9 @@
 
 """Tools for attaching existing audience (user) lists to campaigns and ad groups.
 
-List the available lists with ``search_search`` on ``user_list`` and what is
-attached on ``campaign_criterion`` / ``ad_group_criterion`` (type USER_LIST).
+List the available lists with ``search_search`` on ``user_list``, custom
+segments on ``custom_audience``, and what is attached on ``campaign_criterion`` /
+``ad_group_criterion`` (type USER_LIST / CUSTOM_AUDIENCE).
 
 Audience mode matters for Search:
 * OBSERVATION: ads show to everyone as before; the list only lets you adjust
@@ -48,6 +49,32 @@ def _lookup_lists(search, cid: str, ids: list[str]) -> list:
     return [found[i] for i in ids]
 
 
+def _lookup_custom(search, cid: str, ids: list[str]) -> list:
+    rows = list(
+        search.search(
+            customer_id=cid,
+            query=(
+                "SELECT custom_audience.id, custom_audience.name, "
+                "custom_audience.type, custom_audience.status "
+                f"FROM custom_audience WHERE custom_audience.id IN ({', '.join(ids)})"
+            ),
+        )
+    )
+    found = {
+        str(r.custom_audience.id): r.custom_audience
+        for r in rows
+        if r.custom_audience.status.name != "REMOVED"
+    }
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise ToolError(f"Error: custom audience(s) not found in {cid}: {missing}.")
+    return [found[i] for i in ids]
+
+
+def _describe_custom(items: list) -> list[str]:
+    return [f"{c.id} '{c.name}' (custom segment, {c.type_.name})" for c in items]
+
+
 def _describe(lists: list) -> list[str]:
     return [
         f"{u.id} '{u.name}' ({u.type_.name}, {u.membership_status.name}, "
@@ -79,6 +106,7 @@ def _add_audiences(
     customer_id,
     target_id,
     user_list_ids,
+    custom_audience_ids,
     mode: str,
     percent_change,
     login_customer_id,
@@ -87,7 +115,16 @@ def _add_audiences(
 ):
     cid = mh.require_customer_id(customer_id)
     tid = mh.require_numeric_id(target_id, f"{level}_id")
-    ids = mh.require_ids(user_list_ids, "user_list_ids")
+    ids = mh.require_ids(user_list_ids, "user_list_ids") if user_list_ids else []
+    custom_ids = (
+        mh.require_ids(custom_audience_ids, "custom_audience_ids")
+        if custom_audience_ids
+        else []
+    )
+    if not ids and not custom_ids:
+        raise ToolError(
+            "Error: give at least one of 'user_list_ids' or 'custom_audience_ids'."
+        )
     if mode not in ("OBSERVATION", "TARGETING"):
         raise ToolError("Error: 'mode' must be OBSERVATION or TARGETING.")
     modifier = (
@@ -96,7 +133,8 @@ def _add_audiences(
         else None
     )
     ga_client, search = mh.get_client_and_service(login_customer_id, "GoogleAdsService")
-    lists = _lookup_lists(search, cid, ids)
+    lists = _lookup_lists(search, cid, ids) if ids else []
+    customs = _lookup_custom(search, cid, custom_ids) if custom_ids else []
 
     table, setting = ("campaign", "campaign") if level == "campaign" else ("ad_group", "ad_group")
     rows = list(
@@ -141,11 +179,24 @@ def _add_audiences(
         if modifier is not None:
             crit.bid_modifier = modifier
         ops.append(op)
+    for custom in customs:
+        op = ga_client.get_type("MutateOperation")
+        if level == "campaign":
+            crit = op.campaign_criterion_operation.create
+            crit.campaign = f"customers/{cid}/campaigns/{tid}"
+        else:
+            crit = op.ad_group_criterion_operation.create
+            crit.ad_group = f"customers/{cid}/adGroups/{tid}"
+            crit.status = ga_client.enums.AdGroupCriterionStatusEnum.ENABLED
+        crit.custom_audience.custom_audience = f"customers/{cid}/customAudiences/{custom.id}"
+        if modifier is not None:
+            crit.bid_modifier = modifier
+        ops.append(op)
 
     service = utils.get_googleads_service_from_client(ga_client, "GoogleAdsService")
     mode_text = f"{mode} (was {current})" if current != mode else f"{mode} (unchanged)"
     warning = (
-        "TARGETING: ads will show ONLY to members of these lists; reach can drop sharply"
+        "TARGETING: ads will show ONLY to members of these audiences; reach can drop sharply"
         if mode == "TARGETING"
         else None
     )
@@ -158,6 +209,7 @@ def _add_audiences(
             "level": level,
             "target": tid,
             "lists": [str(u.id) for u in lists],
+            "custom": [str(c.id) for c in customs],
             "mode": mode,
             "current_mode": current,
             "modifier": modifier,
@@ -167,7 +219,8 @@ def _add_audiences(
             entity_readable=f"Audience ({level})",
             primary_key_readable=f"{level} {tid}",
             fields={
-                "Lists": _describe(lists),
+                "Lists": _describe(lists) or None,
+                "Custom audiences": _describe_custom(customs) or None,
                 "Audience mode": mode_text,
                 "Bid adjustment": (
                     f"{percent_change:+g}%" if percent_change is not None else None
@@ -186,7 +239,7 @@ def _add_audiences(
             )
         ),
         on_success=lambda r: (
-            f"Attached {len(lists)} list(s) to {level} {tid} in {mode} mode."
+            f"Attached {len(lists) + len(customs)} audience(s) to {level} {tid} in {mode} mode."
         ),
         error_prefix="Failed to attach audiences",
     )
@@ -198,16 +251,19 @@ def _add_audiences(
 def add_campaign_audience(
     customer_id: str | int,
     campaign_id: str | int,
-    user_list_ids: list[str | int],
+    user_list_ids: list[str | int] | None = None,
+    custom_audience_ids: list[str | int] | None = None,
     mode: Mode = "OBSERVATION",
     percent_change: float | None = None,
     login_customer_id: str | int | None = None,
     validate_only: bool = True,
     checksum: str | None = None,
 ) -> str:
-    """Attaches existing audience lists to a campaign, in the same request setting the campaign's audience mode.
+    """Attaches existing audience lists and/or custom segments to a campaign, in the same request setting the campaign's audience mode.
 
     OBSERVATION (default) keeps reach unchanged and only lets you adjust bids for list members. TARGETING shows ads only to list members. The mode is always set explicitly because a campaign may already be in TARGETING mode (the proposal shows the old and new mode).
+
+    Custom segments: in testing, Google rejected attaching custom segments to Search campaigns and their ad groups with OPERATION_NOT_PERMITTED_FOR_CONTEXT, both the account's auto-generated (AUTO) segment and a freshly created SEARCH segment (INTEREST and PURCHASE_INTENT were not tried). Audience lists (`user_list_ids`) work.
 
     Propose & Confirm Workflow (`validate_only` and `checksum`):
     1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
@@ -217,7 +273,8 @@ def add_campaign_audience(
     Args:
         customer_id: Google Ads Customer ID (digits or hyphenated).
         campaign_id: Numeric campaign ID.
-        user_list_ids: 1-100 audience list IDs (`user_list.id`, see `search_search` on `user_list`).
+        user_list_ids: Audience list IDs (`user_list.id`, see `search_search` on `user_list`).
+        custom_audience_ids: Custom segment IDs (`custom_audience.id`, see `create_custom_audience`). At least one of the two ID lists is required (up to 100 each).
         mode: OBSERVATION (default) or TARGETING.
         percent_change: Optional bid adjustment for members, -90..+900 (percent).
         login_customer_id: Optional manager customer ID for the login-customer-id header.
@@ -230,6 +287,7 @@ def add_campaign_audience(
         customer_id=customer_id,
         target_id=campaign_id,
         user_list_ids=user_list_ids,
+        custom_audience_ids=custom_audience_ids,
         mode=mode,
         percent_change=percent_change,
         login_customer_id=login_customer_id,
@@ -244,16 +302,19 @@ def add_campaign_audience(
 def add_ad_group_audience(
     customer_id: str | int,
     ad_group_id: str | int,
-    user_list_ids: list[str | int],
+    user_list_ids: list[str | int] | None = None,
+    custom_audience_ids: list[str | int] | None = None,
     mode: Mode = "OBSERVATION",
     percent_change: float | None = None,
     login_customer_id: str | int | None = None,
     validate_only: bool = True,
     checksum: str | None = None,
 ) -> str:
-    """Attaches existing audience lists to an ad group, in the same request setting the ad group's audience mode.
+    """Attaches existing audience lists and/or custom segments to an ad group, in the same request setting the ad group's audience mode.
 
     OBSERVATION (default) keeps reach unchanged and only lets you adjust bids for list members. TARGETING shows ads only to list members. The mode is always set explicitly (the proposal shows the old and new mode).
+
+    Custom segments: in testing, Google rejected attaching custom segments to Search campaigns and their ad groups with OPERATION_NOT_PERMITTED_FOR_CONTEXT, both the account's auto-generated (AUTO) segment and a freshly created SEARCH segment (INTEREST and PURCHASE_INTENT were not tried). Audience lists (`user_list_ids`) work.
 
     Propose & Confirm Workflow (`validate_only` and `checksum`):
     1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
@@ -263,7 +324,8 @@ def add_ad_group_audience(
     Args:
         customer_id: Google Ads Customer ID (digits or hyphenated).
         ad_group_id: Numeric ad group ID.
-        user_list_ids: 1-100 audience list IDs (`user_list.id`).
+        user_list_ids: Audience list IDs (`user_list.id`).
+        custom_audience_ids: Custom segment IDs (`custom_audience.id`). At least one of the two ID lists is required (up to 100 each).
         mode: OBSERVATION (default) or TARGETING.
         percent_change: Optional bid adjustment for members, -90..+900 (percent).
         login_customer_id: Optional manager customer ID for the login-customer-id header.
@@ -276,6 +338,7 @@ def add_ad_group_audience(
         customer_id=customer_id,
         target_id=ad_group_id,
         user_list_ids=user_list_ids,
+        custom_audience_ids=custom_audience_ids,
         mode=mode,
         percent_change=percent_change,
         login_customer_id=login_customer_id,
@@ -338,4 +401,163 @@ def remove_ad_group_audiences(
         ),
         on_success=lambda r: f"Detached {len(r.results)} audience(s) from ad group {ag_id}.",
         error_prefix="Failed to remove audiences",
+    )
+
+
+CustomType = Literal["SEARCH", "INTEREST", "PURCHASE_INTENT"]
+
+
+@audiences_mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)
+def create_custom_audience(
+    customer_id: str | int,
+    name: str,
+    keywords: list[str] | None = None,
+    urls: list[str] | None = None,
+    audience_type: CustomType = "SEARCH",
+    description: str | None = None,
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Creates a custom segment: an audience defined by search terms and/or websites. Attach it afterwards with `add_campaign_audience` or `add_ad_group_audience` (`custom_audience_ids`).
+
+    SEARCH = people who searched for these terms on Google (keywords only). INTEREST / PURCHASE_INTENT = people interested in / researching these topics (keywords and/or URLs).
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        name: Segment name, unique in the account.
+        keywords: Up to 100 search terms/topics (80 characters each).
+        urls: Up to 100 website URLs (http:// or https://), INTEREST / PURCHASE_INTENT only.
+        audience_type: SEARCH (default), INTEREST or PURCHASE_INTENT.
+        description: Optional description.
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    if not name or not name.strip():
+        raise ToolError("Error: 'name' is required.")
+    name = name.strip()
+    if audience_type not in ("SEARCH", "INTEREST", "PURCHASE_INTENT"):
+        raise ToolError("Error: 'audience_type' must be SEARCH, INTEREST or PURCHASE_INTENT.")
+    kws = mh.check_texts(keywords, "keywords", min_count=1, max_count=100, max_len=80) if keywords else []
+    links = mh.check_texts(urls, "urls", min_count=1, max_count=100, max_len=2000) if urls else []
+    if not kws and not links:
+        raise ToolError("Error: give 'keywords' and/or 'urls'.")
+    if links and audience_type == "SEARCH":
+        raise ToolError("Error: SEARCH segments take keywords only; use INTEREST or PURCHASE_INTENT for URLs.")
+    for u in links:
+        if not u.startswith(("http://", "https://")):
+            raise ToolError(f"Error: url '{u}' must start with http:// or https://.")
+    ga_client, service = mh.get_client_and_service(login_customer_id, "CustomAudienceService")
+    op = ga_client.get_type("CustomAudienceOperation")
+    created = op.create
+    created.name = name
+    created.type_ = ga_client.enums.CustomAudienceTypeEnum[audience_type]
+    if description:
+        created.description = description
+    for text in kws:
+        member = ga_client.get_type("CustomAudienceMember")
+        member.member_type = ga_client.enums.CustomAudienceMemberTypeEnum.KEYWORD
+        member.keyword = text
+        created.members.append(member)
+    for url in links:
+        member = ga_client.get_type("CustomAudienceMember")
+        member.member_type = ga_client.enums.CustomAudienceMemberTypeEnum.URL
+        member.url = url
+        created.members.append(member)
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={
+            "tool": "create_custom_audience",
+            "name": name,
+            "type": audience_type,
+            "keywords": kws,
+            "urls": links,
+            "description": description,
+        },
+        change_items=pac.build_change_items(
+            operation="CREATE",
+            entity_readable="Custom audience",
+            primary_key_readable=name,
+            fields={
+                "Name": name,
+                "Type": audience_type,
+                "Keywords": kws or None,
+                "URLs": links or None,
+                "Description": description,
+            },
+        ),
+        mutate=lambda dry: service.mutate_custom_audiences(
+            request=mh.build_request(
+                ga_client, "MutateCustomAudiencesRequest", cid, [op], validate_only=dry
+            )
+        ),
+        on_success=lambda r: (
+            f"Created custom audience '{name}'. ID: "
+            f"{utils.extract_id(r.results[0].resource_name)}"
+        ),
+        error_prefix="Failed to create custom audience",
+    )
+
+
+@audiences_mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+)
+def remove_custom_audience(
+    customer_id: str | int,
+    custom_audience_id: str | int,
+    login_customer_id: str | int | None = None,
+    validate_only: bool = True,
+    checksum: str | None = None,
+) -> str:
+    """Removes a custom segment. It stops applying wherever it was attached. Cannot be undone.
+
+    Propose & Confirm Workflow (`validate_only` and `checksum`):
+    1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
+    2. Present the `change_items` to the user and wait for explicit user approval.
+    3. Only after user confirmation, call again with `validate_only=False`, the exact same parameters and the `checksum` returned by step 1.
+
+    Args:
+        customer_id: Google Ads Customer ID (digits or hyphenated).
+        custom_audience_id: Numeric custom segment ID (`custom_audience.id`).
+        login_customer_id: Optional manager customer ID for the login-customer-id header.
+        validate_only: If True (default), only validates and returns a proposal with a `checksum`.
+        checksum: Checksum from the prior `validate_only=True` call. Required to commit.
+    """
+    cid = mh.require_customer_id(customer_id)
+    cust = mh.require_numeric_id(custom_audience_id, "custom_audience_id")
+    ga_client, search = mh.get_client_and_service(login_customer_id, "GoogleAdsService")
+    service = utils.get_googleads_service_from_client(ga_client, "CustomAudienceService")
+    found = _lookup_custom(search, cid, [cust])[0]
+    resource_name = f"customers/{cid}/customAudiences/{cust}"
+    op = ga_client.get_type("CustomAudienceOperation")
+    op.remove = resource_name
+    return mh.run_mutation(
+        customer_id=cid,
+        validate_only=validate_only,
+        checksum=checksum,
+        payload={"tool": "remove_custom_audience", "rn": resource_name},
+        change_items=pac.build_change_items(
+            operation="REMOVE",
+            entity_readable="Custom audience",
+            primary_key_readable=f"{found.name} ({resource_name})",
+            fields={"Resource": resource_name},
+        ),
+        mutate=lambda dry: service.mutate_custom_audiences(
+            request=mh.build_request(
+                ga_client, "MutateCustomAudiencesRequest", cid, [op], validate_only=dry
+            )
+        ),
+        on_success=lambda _r: f"Removed custom audience {cust}.",
+        error_prefix="Failed to remove custom audience",
     )

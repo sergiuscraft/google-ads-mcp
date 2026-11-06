@@ -36,7 +36,7 @@ More defaults:
 - Adjustments are percentages (`+20` = bid 20% higher) rather than raw
   multipliers.
 
-## Tools added by this fork (38)
+## Tools added by this fork (40)
 
 Names are the MCP names as the server exposes them (`<category>_<tool>`).
 `R` = read-only, `D` = destructive.
@@ -50,7 +50,7 @@ Names are the MCP names as the server exposes them (`<category>_<tool>`).
 | `keywords` | `add_keywords`, `add_negative_keywords` (campaign or ad-group level), `update_keyword`, `remove_keywords` (D) |
 | `shared_sets` | `create_negative_keyword_list` (list + words + campaign links in one request), `add_list_negative_keywords`, `remove_list_negative_keywords` (D), `attach_negative_keyword_list`, `detach_negative_keyword_list` (D), `remove_negative_keyword_list` (D) |
 | `targeting` | `suggest_geo_targets` (R), `add_campaign_locations` (target or exclude), `add_campaign_languages`, `remove_campaign_criteria` (D; locations, languages, campaign negatives) |
-| `audiences` | `add_campaign_audience`, `add_ad_group_audience` (attach existing audience lists, always setting the audience mode explicitly: OBSERVATION default = bid adjustments only, TARGETING = show only to list members), `remove_ad_group_audiences` (D); for campaign-level audiences remove with `remove_campaign_criteria` and change bids with `set_criterion_bid_modifier` |
+| `audiences` | `add_campaign_audience`, `add_ad_group_audience` (attach existing audience lists, always setting the audience mode explicitly: OBSERVATION default = bid adjustments only, TARGETING = show only to list members), `remove_ad_group_audiences` (D), `create_custom_audience` (custom segment from search terms and/or URLs), `remove_custom_audience` (D); the attach tools take `user_list_ids` and/or `custom_audience_ids`; for campaign-level audiences remove with `remove_campaign_criteria` and change bids with `set_criterion_bid_modifier` |
 | `scheduling` | `add_campaign_ad_schedule`, `set_campaign_device_bid_modifier`, `set_criterion_bid_modifier` (location, schedule window or device) |
 | `asset_links` | `link_asset`, `unlink_asset` (D) for campaign, ad group or account level |
 | `conversions` | `create_conversion_action`, `update_conversion_action` |
@@ -76,12 +76,56 @@ Notes that matter:
   `replace_responsive_search_ad`. Expanded text ads can no longer be created or
   edited at all.
 - A budget that is not *shared* can serve only one campaign.
+- **Language targeting on Search is going away.** Per Google's announcement
+  (13 Aug 2026, effective late September 2026, relayed by a
+  [third-party article](https://spilnoagency.com.ua/novyny/zminy-movnogo-targetyngu-google-ads)),
+  campaign language criteria no longer affect Search and AI Max campaigns; the
+  ad copy's language decides, and adding/editing a language criterion on a Search
+  campaign is expected to return `OPERATION_NOT_PERMITTED_FOR_CONTEXT`. It still
+  applies to non-Search channels. The test account still accepted the dry run
+  for Search campaigns, so `add_campaign_languages` may be obsolete for Search.
 - **Audience mode:** existing campaigns can already be in TARGETING mode
   (`bid_only=false`), where attaching a list would restrict ads to its members.
   The audience tools therefore set the mode in the same request and show
   "old -> new" in the proposal. Audience lists are listed with `search_search`
-  on `user_list`. Creating lists (website visitors, Customer Match) is not
-  covered.
+  on `user_list` and custom segments on `custom_audience`. Creating lists
+  (website visitors, Customer Match) is not covered.
+
+## Findings from testing (November 2026)
+
+Things learned against a real Search-only account, so they do not have to be
+rediscovered. They describe that account and API version v26; behaviour may
+change.
+
+- **Custom segments cannot be attached to Search campaigns.** A throwaway
+  `SEARCH` segment (created and removed) and the account's auto-generated
+  segment were both rejected at campaign and ad group level with
+  `OPERATION_NOT_PERMITTED_FOR_CONTEXT`. `INTEREST` and `PURCHASE_INTENT` were
+  not tried. Use audience lists on Search.
+- **Language targeting is being removed for Search** (announced 13 Aug 2026,
+  effective late September 2026; see the note under "Tools"). The dry run was
+  still accepted on the test account.
+- **Existing campaigns may be in audience TARGETING mode** (`bid_only=false`).
+  Attaching a list without changing the mode would restrict ads to its members,
+  so the audience tools set the mode explicitly in the same request.
+- **Explorer access rejects Keyword Planner** with
+  `DEVELOPER_TOKEN_NOT_APPROVED`. A `suggest_keyword_ideas` tool was built and
+  removed for that reason.
+- **Imported conversion actions cannot be changed through the API.** Conversion
+  actions of type `UNIVERSAL_ANALYTICS_GOAL` (imported from Analytics) return
+  "Mutates are not allowed for the requested resource"; only natively created
+  ones (for example `CLICK_TO_CALL`, `WEBPAGE`) can be updated.
+- **Ad schedules overlap easily.** Campaigns that already have windows reject
+  new overlapping ones; check existing `AD_SCHEDULE` criteria first.
+- **An unset `bid_modifier` reads as `0.0`** in the client library, which would
+  look like -100%. The tools check presence and report it as "no adjustment".
+- **Dry-run acceptance is not proof of success.** `validate_only` checks
+  syntax and many rules, not every business rule; the same call can still be
+  rejected on commit.
+- **`OPERATION_NOT_PERMITTED_FOR_CONTEXT` is a generic context error.** It means
+  "not allowed here", not one specific cause. Google's February 2025 post about
+  `CustomerService.CreateCustomerClient` mentions it only for ineligible
+  account creation on old API versions and is unrelated to audiences.
 
 ## Deliberately not included
 
@@ -175,6 +219,13 @@ Be aware of how far each tool has been checked:
 - **Audience tools:** dry-run verified for campaign and ad group, including the
   TARGETING to OBSERVATION mode switch; no real commit has been made, so the
   mode switch itself is unproven in practice.
+- **Custom segments:** creating and removing them passes Google's dry run and
+  was really done once (a throwaway segment, then removed). Attaching a custom
+  segment to a Search campaign or its ad group is rejected with
+  `OPERATION_NOT_PERMITTED_FOR_CONTEXT`, for the account's auto-generated
+  segment and for a freshly created `SEARCH` segment alike (`INTEREST` and
+  `PURCHASE_INTENT` types were not tried). So on Search campaigns, use audience
+  lists; custom segments appear unusable there through the API.
 - **Not verified live at all:** `detach_negative_keyword_list` and
   `set_campaign_budget` success paths (the test account had no shared list or
   shared budget), `replace_responsive_search_ad` (no responsive search ad in the

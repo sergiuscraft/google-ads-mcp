@@ -199,6 +199,140 @@ class AdGroupAudienceTests(AudienceBase):
         )
 
 
+class CustomAudienceTests(AudienceBase):
+    def custom_row(self, cid, name="Insulation seekers", ctype="SEARCH", status="ENABLED"):
+        c = MagicMock()
+        c.id = cid
+        c.name = name
+        c.type_.name = ctype
+        c.status.name = status
+        row = MagicMock()
+        row.custom_audience = c
+        return row
+
+    def setup_custom(self, restrictions=(("AUDIENCE", True),), customs=(("777", "Insulation seekers"),), level="campaign"):
+        custom_rows = [self.custom_row(i, n) for i, n in customs]
+        settings = self.settings_row(level, list(restrictions))
+
+        def search(customer_id, query):
+            if "FROM custom_audience" in query:
+                return custom_rows
+            if "FROM user_list" in query:
+                return [self.user_list("111")]
+            return [settings]
+
+        svc = self._get_service("GoogleAdsService")
+        svc.search.side_effect = search
+        svc.mutate.return_value = MagicMock()
+        return svc
+
+    def test_create_search_segment(self):
+        svc = self._get_service("CustomAudienceService")
+        svc.mutate_custom_audiences.return_value = _resp("customers/1/customAudiences/42")
+        _, result = self.propose_then_commit(
+            audiences.create_custom_audience,
+            customer_id="1",
+            name=" Eko seekers ",
+            keywords=["эковата цена", "утепление дома"],
+            description="test",
+        )
+        created = _req(svc, "mutate_custom_audiences").operations[0].create
+        self.assertEqual(created.name, "Eko seekers")
+        self.assertEqual(created.type_.name, "SEARCH")
+        self.assertEqual(created.description, "test")
+        self.assertEqual([m.member_type.name for m in created.members], ["KEYWORD", "KEYWORD"])
+        self.assertEqual(created.members[0].keyword, "эковата цена")
+        self.assertIn("ID: 42", result)
+
+    def test_interest_segment_with_urls(self):
+        svc = self._get_service("CustomAudienceService")
+        svc.mutate_custom_audiences.return_value = _resp("customers/1/customAudiences/43")
+        self.propose_then_commit(
+            audiences.create_custom_audience,
+            customer_id="1",
+            name="Competitors",
+            audience_type="INTEREST",
+            keywords=["insulation"],
+            urls=["https://example.com/a"],
+        )
+        members = _req(svc, "mutate_custom_audiences").operations[0].create.members
+        self.assertEqual([m.member_type.name for m in members], ["KEYWORD", "URL"])
+        self.assertEqual(members[1].url, "https://example.com/a")
+
+    def test_create_validation(self):
+        bad = [
+            {"name": " ", "keywords": ["a"]},
+            {"name": "x"},  # no members
+            {"name": "x", "keywords": []},
+            {"name": "x", "urls": ["https://a.com"]},  # SEARCH takes keywords only
+            {"name": "x", "keywords": ["a"], "urls": ["https://a.com"]},  # SEARCH + urls
+            {"name": "x", "audience_type": "INTEREST", "urls": ["a.com"]},  # bad url
+            {"name": "x", "audience_type": "AUTO", "keywords": ["a"]},
+            {"name": "x", "keywords": ["a", "A"]},
+        ]
+        for kwargs in bad:
+            with self.assertRaises(ToolError, msg=str(kwargs)):
+                audiences.create_custom_audience(customer_id="1", **kwargs)
+
+    def test_attach_custom_segment_to_campaign(self):
+        svc = self.setup_custom(restrictions=[("AUDIENCE", False)])
+        proposal, result = self.propose_then_commit(
+            audiences.add_campaign_audience,
+            customer_id="1",
+            campaign_id="5",
+            custom_audience_ids=["777"],
+            percent_change=15,
+        )
+        ops = self.ops(svc)
+        self.assertEqual(len(ops), 2)  # mode switch + criterion
+        crit = ops[1].campaign_criterion_operation.create
+        self.assertEqual(crit.custom_audience.custom_audience, "customers/1/customAudiences/777")
+        self.assertAlmostEqual(crit.bid_modifier, 1.15, places=5)
+        text = json.dumps(proposal)
+        self.assertIn("Insulation seekers", text)
+        self.assertIn("OBSERVATION (was TARGETING)", text)
+        self.assertIn("1 audience(s)", result)
+
+    def test_lists_and_segments_together_on_ad_group(self):
+        svc = self.setup_custom(level="ad_group")
+        self.propose_then_commit(
+            audiences.add_ad_group_audience,
+            customer_id="1",
+            ad_group_id="7",
+            user_list_ids=["111"],
+            custom_audience_ids=["777"],
+        )
+        crits = [o.ad_group_criterion_operation.create for o in self.ops(svc)]
+        self.assertEqual(len(crits), 2)  # mode already OBSERVATION: no mode op
+        self.assertEqual(crits[0].user_list.user_list, "customers/1/userLists/111")
+        self.assertEqual(crits[1].custom_audience.custom_audience, "customers/1/customAudiences/777")
+
+    def test_unknown_or_removed_segment(self):
+        svc = self.setup_custom()
+        rows = [self.custom_row("777", status="REMOVED")]
+        svc.search.side_effect = lambda customer_id, query: rows if "FROM custom_audience" in query else []
+        with self.assertRaises(ToolError):
+            audiences.add_campaign_audience(customer_id="1", campaign_id="5", custom_audience_ids=["777"])
+        with self.assertRaises(ToolError):
+            audiences.remove_custom_audience(customer_id="1", custom_audience_id="777")
+
+    def test_needs_some_audience(self):
+        self.setup_custom()
+        with self.assertRaises(ToolError):
+            audiences.add_campaign_audience(customer_id="1", campaign_id="5")
+
+    def test_remove_segment(self):
+        self.setup_custom()
+        svc = self._get_service("CustomAudienceService")
+        self.propose_then_commit(
+            audiences.remove_custom_audience, customer_id="1", custom_audience_id="777"
+        )
+        self.assertEqual(
+            _req(svc, "mutate_custom_audiences").operations[0].remove,
+            "customers/1/customAudiences/777",
+        )
+
+
 class UserListBidModifierTests(WriteToolsBase):
     def test_set_criterion_bid_modifier_accepts_user_list(self):
         crit = self.real.get_type("CampaignCriterion")

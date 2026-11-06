@@ -171,6 +171,8 @@ def add_campaign_languages(
 ) -> str:
     """Targets languages for a campaign. Common IDs: Russian 1031, Ukrainian 1036, English 1000 (others: query `language_constant` with `search_search`).
 
+    Heads-up: Google announced (13 Aug 2026, effective late September 2026) that campaign-level language targeting is being removed for Search campaigns, where the language of the ad copy decides instead; adding or editing a language criterion on a Search campaign is then expected to fail with OPERATION_NOT_PERMITTED_FOR_CONTEXT. Still applies to Performance Max (non-Search channels). On this fork's test account the dry run was still accepted for Search campaigns, so write language-clear ad copy and treat this tool as possibly obsolete for Search.
+
     Propose & Confirm Workflow (`validate_only` and `checksum`):
     1. Call with `validate_only=True` (the default). After a Google Ads dry run passes, the tool returns structured `change_items` and a `checksum` without committing anything.
     2. Present the `change_items` to the user and wait for explicit user approval.
