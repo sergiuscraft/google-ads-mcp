@@ -136,9 +136,14 @@ def create_campaign(
 
     def _mutate(dry_run: bool):
         return service.mutate(
-            customer_id=cid,
-            mutate_operations=[budget_op, campaign_op],
-            validate_only=dry_run,
+            request=mh.build_request(
+                ga_client,
+                "MutateGoogleAdsRequest",
+                cid,
+                [budget_op, campaign_op],
+                validate_only=dry_run,
+                operations_field="mutate_operations",
+            )
         )
 
     def _done(response) -> str:
@@ -213,7 +218,9 @@ def set_campaign_status(
 
     def _mutate(dry_run: bool):
         return service.mutate_campaigns(
-            customer_id=cid, operations=[op], validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateCampaignsRequest", cid, [op], validate_only=dry_run
+            )
         )
 
     return mh.run_mutation(
@@ -316,7 +323,9 @@ def update_campaign_budget(
 
     def _mutate(dry_run: bool):
         return service.mutate_campaign_budgets(
-            customer_id=cid, operations=[op], validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateCampaignBudgetsRequest", cid, [op], validate_only=dry_run
+            )
         )
 
     return mh.run_mutation(

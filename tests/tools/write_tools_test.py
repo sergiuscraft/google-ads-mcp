@@ -5,7 +5,7 @@
 
 import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 from fastmcp.exceptions import ToolError
 from google.ads.googleads.client import GoogleAdsClient
@@ -43,7 +43,15 @@ class WriteToolsBase(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def _get_service(self, name, **kwargs):
-        return self.services.setdefault(name, MagicMock())
+        # Autospec'd against the real generated client, so a call with an
+        # argument the real method does not accept (e.g. a flattened
+        # ``validate_only``) fails here instead of only against the live API.
+        if name not in self.services:
+            real_service = self.real.get_service(name)
+            self.services[name] = create_autospec(
+                type(real_service), instance=True
+            )
+        return self.services[name]
 
     def propose_then_commit(self, fn, **kwargs):
         """Runs the two-phase flow; returns (proposal_dict, commit_result)."""
@@ -74,10 +82,10 @@ class CampaignTests(WriteToolsBase):
         self.assertIn("ID: 777", result)
         self.assertEqual(svc.mutate.call_count, 2)
         dry, commit = svc.mutate.call_args_list
-        self.assertTrue(dry.kwargs["validate_only"])
-        self.assertFalse(commit.kwargs["validate_only"])
-        self.assertEqual(commit.kwargs["customer_id"], "1234567890")
-        budget_op, camp_op = commit.kwargs["mutate_operations"]
+        self.assertTrue(dry.kwargs["request"].validate_only)
+        self.assertFalse(commit.kwargs["request"].validate_only)
+        self.assertEqual(commit.kwargs["request"].customer_id, "1234567890")
+        budget_op, camp_op = commit.kwargs["request"].mutate_operations
         budget = budget_op.campaign_budget_operation.create
         self.assertEqual(budget.amount_micros, 12_500_000)
         self.assertFalse(budget.explicitly_shared)
@@ -131,7 +139,7 @@ class CampaignTests(WriteToolsBase):
             campaign_id="42",
             status="ENABLED",
         )
-        op = svc.mutate_campaigns.call_args.kwargs["operations"][0]
+        op = svc.mutate_campaigns.call_args.kwargs["request"].operations[0]
         self.assertEqual(
             op.update.resource_name, "customers/1234567890/campaigns/42"
         )
@@ -163,7 +171,7 @@ class CampaignTests(WriteToolsBase):
             campaign_id="42",
             daily_budget=20,
         )
-        op = svc.mutate_campaign_budgets.call_args.kwargs["operations"][0]
+        op = svc.mutate_campaign_budgets.call_args.kwargs["request"].operations[0]
         self.assertEqual(
             op.update.resource_name, "customers/1/campaignBudgets/55"
         )
@@ -202,7 +210,7 @@ class AdGroupTests(WriteToolsBase):
             name="Group",
             cpc_bid=0.75,
         )
-        op = svc.mutate_ad_groups.call_args.kwargs["operations"][0]
+        op = svc.mutate_ad_groups.call_args.kwargs["request"].operations[0]
         self.assertEqual(op.create.campaign, "customers/1/campaigns/42")
         self.assertEqual(op.create.cpc_bid_micros, 750_000)
         self.assertEqual(op.create.status.name, "PAUSED")
@@ -222,7 +230,7 @@ class AdGroupTests(WriteToolsBase):
             status="PAUSED",
             cpc_bid=1.2,
         )
-        op = svc.mutate_ad_groups.call_args.kwargs["operations"][0]
+        op = svc.mutate_ad_groups.call_args.kwargs["request"].operations[0]
         self.assertEqual(
             sorted(op.update_mask.paths), ["cpc_bid_micros", "status"]
         )
@@ -240,7 +248,7 @@ class KeywordTests(WriteToolsBase):
             keywords=["эковата", "утепление"],
             match_type="EXACT",
         )
-        ops = svc.mutate_ad_group_criteria.call_args.kwargs["operations"]
+        ops = svc.mutate_ad_group_criteria.call_args.kwargs["request"].operations
         self.assertEqual(
             [o.create.keyword.text for o in ops], ["эковата", "утепление"]
         )
@@ -263,7 +271,7 @@ class KeywordTests(WriteToolsBase):
             campaign_id="42",
             keywords=["free"],
         )
-        op = svc.mutate_campaign_criteria.call_args.kwargs["operations"][0]
+        op = svc.mutate_campaign_criteria.call_args.kwargs["request"].operations[0]
         self.assertTrue(op.create.negative)
         self.assertEqual(op.create.campaign, "customers/1/campaigns/42")
 
@@ -276,7 +284,7 @@ class KeywordTests(WriteToolsBase):
             ad_group_id="7",
             keywords=["free"],
         )
-        op = svc.mutate_ad_group_criteria.call_args.kwargs["operations"][0]
+        op = svc.mutate_ad_group_criteria.call_args.kwargs["request"].operations[0]
         self.assertTrue(op.create.negative)
 
     def test_negative_needs_exactly_one_target(self):
@@ -303,7 +311,7 @@ class ResponsiveSearchAdTests(WriteToolsBase):
             final_url="https://example.com",
             path1="eco",
         )
-        op = svc.mutate_ad_group_ads.call_args.kwargs["operations"][0]
+        op = svc.mutate_ad_group_ads.call_args.kwargs["request"].operations[0]
         rsa = op.create.ad.responsive_search_ad
         self.assertEqual([h.text for h in rsa.headlines], self.HEADS)
         self.assertEqual(rsa.path1, "eco")

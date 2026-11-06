@@ -79,7 +79,9 @@ def create_ad_group(
 
     def _mutate(dry_run: bool):
         return service.mutate_ad_groups(
-            customer_id=cid, operations=[op], validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateAdGroupsRequest", cid, [op], validate_only=dry_run
+            )
         )
 
     def _done(response) -> str:
@@ -167,7 +169,9 @@ def update_ad_group(
 
     def _mutate(dry_run: bool):
         return service.mutate_ad_groups(
-            customer_id=cid, operations=[op], validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateAdGroupsRequest", cid, [op], validate_only=dry_run
+            )
         )
 
     return mh.run_mutation(

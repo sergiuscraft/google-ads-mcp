@@ -87,7 +87,9 @@ def add_keywords(
 
     def _mutate(dry_run: bool):
         return service.mutate_ad_group_criteria(
-            customer_id=cid, operations=ops, validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateAdGroupCriteriaRequest", cid, ops, validate_only=dry_run
+            )
         )
 
     return mh.run_mutation(
@@ -168,6 +170,7 @@ def add_negative_keywords(
             ]
             ops.append(op)
         mutate_method = "mutate_campaign_criteria"
+        request_type = "MutateCampaignCriteriaRequest"
     else:
         target_id = mh.require_numeric_id(ad_group_id, "ad_group_id")
         level = "ad group"
@@ -185,6 +188,7 @@ def add_negative_keywords(
             ]
             ops.append(op)
         mutate_method = "mutate_ad_group_criteria"
+        request_type = "MutateAdGroupCriteriaRequest"
 
     change_items = pac.build_change_items(
         operation="CREATE",
@@ -195,7 +199,9 @@ def add_negative_keywords(
 
     def _mutate(dry_run: bool):
         return getattr(service, mutate_method)(
-            customer_id=cid, operations=ops, validate_only=dry_run
+            request=mh.build_request(
+                ga_client, request_type, cid, ops, validate_only=dry_run
+            )
         )
 
     return mh.run_mutation(

@@ -67,6 +67,27 @@ def check_texts(
     return cleaned
 
 
+def build_request(
+    ga_client: Any,
+    request_type: str,
+    customer_id: str,
+    operations: Sequence[Any],
+    *,
+    validate_only: bool,
+    operations_field: str = "operations",
+) -> Any:
+    """Builds a ``Mutate*Request``.
+
+    The generated service methods only accept ``validate_only`` through a
+    request object (it is not one of their flattened keyword arguments).
+    """
+    request = ga_client.get_type(request_type)
+    request.customer_id = customer_id
+    getattr(request, operations_field).extend(operations)
+    request.validate_only = validate_only
+    return request
+
+
 def run_mutation(
     *,
     customer_id: str,

@@ -107,7 +107,9 @@ def create_responsive_search_ad(
 
     def _mutate(dry_run: bool):
         return service.mutate_ad_group_ads(
-            customer_id=cid, operations=[op], validate_only=dry_run
+            request=mh.build_request(
+                ga_client, "MutateAdGroupAdsRequest", cid, [op], validate_only=dry_run
+            )
         )
 
     def _done(response) -> str:
