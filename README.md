@@ -5,7 +5,7 @@ This repo contains the source code for running an
 [Google Ads API](https://developers.google.com/google-ads/api).
 
 > **Fork note:** this fork adds write tools (campaigns, budgets, keywords, ads,
-> targeting, schedules, shared negative lists, conversions). See
+> targeting, schedules, shared negative lists, audiences, conversions). See
 > [FORK.md](FORK.md) for the tools, the safety model and setup.
 
 ## Tools

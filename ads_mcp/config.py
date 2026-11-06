@@ -49,6 +49,7 @@ ALL_CATEGORIES = [
     "shared_sets",
     "scheduling",
     "budgets",
+    "audiences",
 ]
 
 

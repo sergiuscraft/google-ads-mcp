@@ -88,6 +88,16 @@ def build_request(
     return request
 
 
+def percent_to_modifier(
+    percent: float, *, allow_exclude: bool, name: str = "percent_change"
+) -> float:
+    """Converts a percent change (+20) to an API bid modifier multiplier (1.2)."""
+    low = -100 if allow_exclude else -90
+    if isinstance(percent, bool) or not low <= percent <= 900:
+        raise ToolError(f"Error: '{name}' must be between {low} and 900.")
+    return round(1 + percent / 100, 4)
+
+
 def get_client_and_service(
     login_customer_id: str | int | None, service_name: str
 ) -> tuple[Any, Any]:

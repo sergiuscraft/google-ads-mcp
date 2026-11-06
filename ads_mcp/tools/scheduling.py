@@ -44,12 +44,7 @@ class ScheduleSlot(BaseModel):
     )
 
 
-def _modifier(percent: float, *, allow_exclude: bool, name: str = "percent_change") -> float:
-    """Converts a percent change to an API bid modifier multiplier."""
-    low = -100 if allow_exclude else -90
-    if isinstance(percent, bool) or not low <= percent <= 900:
-        raise ToolError(f"Error: '{name}' must be between {low} and 900.")
-    return round(1 + percent / 100, 4)
+_modifier = mh.percent_to_modifier
 
 
 def _current_percent(criterion) -> float:
@@ -263,7 +258,7 @@ def set_criterion_bid_modifier(
     validate_only: bool = True,
     checksum: str | None = None,
 ) -> str:
-    """Changes the bid adjustment of an existing campaign criterion: a location, ad schedule window or device. Find `criterion_id` with `search_search` on `campaign_criterion`.
+    """Changes the bid adjustment of an existing campaign criterion: a location, ad schedule window, device or audience list. Find `criterion_id` with `search_search` on `campaign_criterion`.
 
     Range -90..+900 percent (-100 only for devices).
 
@@ -275,7 +270,7 @@ def set_criterion_bid_modifier(
     Args:
         customer_id: Google Ads Customer ID (digits or hyphenated).
         campaign_id: Numeric campaign ID.
-        criterion_id: Numeric criterion ID of a LOCATION, AD_SCHEDULE or DEVICE criterion.
+        criterion_id: Numeric criterion ID of a LOCATION, AD_SCHEDULE, DEVICE or USER_LIST criterion.
         percent_change: Percent change, e.g. 25 or -40.
         login_customer_id: Optional manager customer ID for the login-customer-id header.
         validate_only: If True (default), only validates and returns a proposal with a `checksum`.
@@ -292,9 +287,9 @@ def set_criterion_bid_modifier(
     if existing is None:
         raise ToolError(f"Error: criterion {crit_id} not found in campaign {camp_id}.")
     ctype = existing.campaign_criterion.type_.name
-    if ctype not in ("LOCATION", "AD_SCHEDULE", "DEVICE"):
+    if ctype not in ("LOCATION", "AD_SCHEDULE", "DEVICE", "USER_LIST"):
         raise ToolError(
-            f"Error: criterion {crit_id} is {ctype}; only LOCATION, AD_SCHEDULE and DEVICE adjustments are supported."
+            f"Error: criterion {crit_id} is {ctype}; only LOCATION, AD_SCHEDULE, DEVICE and USER_LIST adjustments are supported."
         )
     modifier = _modifier(percent_change, allow_exclude=(ctype == "DEVICE"))
     resource_name = f"customers/{cid}/campaignCriteria/{camp_id}~{crit_id}"
