@@ -46,6 +46,7 @@ ALL_CATEGORIES = [
     "asset_links",
     "targeting",
     "conversions",
+    "shared_sets",
 ]
 
 

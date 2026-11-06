@@ -16,5 +16,6 @@ namespaces:
   asset_links: true
   targeting: true
   conversions: true
+  shared_sets: true
   # No "research" (suggest_keyword_ideas) on purpose: Keyword Planner needs Basic/Standard
   # API access, explorer access is rejected. Removed; not to be re-added.
