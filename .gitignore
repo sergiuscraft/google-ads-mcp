@@ -37,3 +37,6 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 .nox/
+
+# Account audits (client data, never commit)
+audit-*.md
