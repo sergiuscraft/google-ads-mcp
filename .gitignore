@@ -40,3 +40,6 @@ coverage.xml
 
 # Account audits (client data, never commit)
 audit-*.md
+en-keywords-*.csv
+ru-keywords-*.csv
+uk-keywords-*.csv
